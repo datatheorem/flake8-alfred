@@ -6,10 +6,6 @@ def should_not_be_reported_0():
     sleep = 1
 
 
-sleep(1)
-
-del sleep
-
 # Should be reported
 sleep(1)
 
