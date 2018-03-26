@@ -1,0 +1,13 @@
+image: python:3.6
+
+pipelines:
+  default:
+    - step:
+        caches:
+          - pip
+        script:
+          - pip install pipenv
+          - pipenv install --dev
+          - pipenv run flake8
+          - pipenv run mypy main.py
+          - pipenv run pytest
