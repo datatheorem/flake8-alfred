@@ -1,115 +1,174 @@
-from ast import Del, NodeVisitor, Store, iter_child_nodes
+"""Flake8 plugin emitting warning for obsolete symbols."""
+
+import builtins
+
+from ast import (
+    # Generic AST type
+    AST,
+    # Statements
+    AsyncFunctionDef, ClassDef, FunctionDef, Import, ImportFrom,
+    # Expressions
+    Attribute, Name,
+    # Expression context
+    Del, Param, Store,
+    # Visitors
+    NodeVisitor, iter_child_nodes
+)
+
 from collections import ChainMap
 from contextlib import contextmanager
-from itertools import chain
+from typing import Any, Iterator, MutableMapping, Optional, Sequence, Tuple
 
 
-def submodules(module_name: str):
-    bits = module_name.split(".")
-    for i in range(1, len(bits)):
-        yield ".".join(bits[:i])
+SYMBOLS = Iterator[Tuple[str, AST]]
 
 
 class QualifiedNamesVisitor(NodeVisitor):
-    def __init__(self):
-        self._context = ChainMap()
+    """QualifiedNamesVisitor.visit yields a pair (qualified_name, node) for all
+    qualified names it finds in the given AST.
+
+    It can handle:
+        - Imports: Importing an obsolete symbol will yield it;
+        - Delete statements: (del obsolete_symbol; obsolete symbol) doesn't
+          yields anything;
+        - Scopes: If you overwrite a symbol in a given function or class scope,
+          it will not be overwriten in outer scopes;
+        - Type annotations can yield.
+
+    We don't support global and nonlocal statements for now, and the assignment
+    operator untrack the symbol if it's on the left hand side, no matter what's
+    on the right hand side.
+    """
+    def __init__(self) -> None:
+        init = dir(builtins)
+        self._context = ChainMap(dict(zip(init, init)))
 
     @contextmanager
-    def block(self, **kwargs):
-        self._context = self._context.new_child(kwargs)
+    def scope(self) -> Iterator[MutableMapping[str, Any]]:
+        self._context = self._context.new_child()
         try:
-            yield kwargs
+            yield self._context.maps[0]
         finally:
             self._context = self._context.parents
 
-    def generic_visit(self, node):
-        for i in iter_child_nodes(node):
-            yield from self.visit(i)
+    def generic_visit(self, node: AST) -> SYMBOLS:
+        for child in iter_child_nodes(node):
+            yield from self.visit(child)
+
+    # SPECIAL
+
+    def visit_arg(self, node: AST) -> SYMBOLS:
+        yield from self.visit_optional(node.annotation)
+        self._context[node.arg] = None
+
+    def visit_optional(self, node: Optional[AST]) -> SYMBOLS:
+        if node is not None:
+            yield from self.visit(node)
+
+    def visit_list(self, node: Sequence[AST]) -> SYMBOLS:
+        for item in node:
+            yield from self.visit(item)
 
     # STATEMENTS
 
-    def visit_AsyncFunctionDef(self, node):
+    def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> SYMBOLS:
+        yield from self.visit_list(node.decorator_list)
+        yield from self.visit_optional(node.returns)
+        yield from self.visit_list(node.args.kw_defaults)
+        yield from self.visit_list(node.args.defaults)
         self._context[node.name] = None
-        for decorator in node.decorator_list:
-            yield from self.visit(decorator)
-        with self.block():
+        with self.scope():
             yield from self.visit(node.args)
-            for item in node.body:
-                yield from self.visit(statement)
+            yield from self.visit_list(node.args.kwonlyargs)
+            yield from self.visit_list(node.args.args)
+            yield from self.visit_optional(node.args.kwarg)
+            yield from self.visit_optional(node.args.vararg)
+            yield from self.visit_list(node.body)
 
-    def visit_ClassDef(self, node):
-        self._context.pop(node.name, None)
-        for decorator in node.decorator_list:
-            yield from self.visit(decorator)
-        with self.block():
-            for expr in chain(node.bases, node.keywords):
-                yield from self.visit(expr)
-            for statement in node.body:
-                yield from self.visit(statement)
-
-    def visit_FunctionDef(self, node):
+    def visit_ClassDef(self, node: ClassDef) -> SYMBOLS:
+        yield from self.visit_list(node.decorator_list)
+        yield from self.visit_list(node.bases)
+        yield from self.visit_list(node.keywords)
         self._context[node.name] = None
-        for decorator in node.decorator_list:
-            yield from self.visit(decorator)
-        with self.block():
-            yield from self.visit(node.args)
-            for statement in node.body:
-                yield from self.visit(statement)
+        with self.scope():
+            yield from self.visit_list(node.body)
 
-    def visit_Import(self, node):
+    def visit_FunctionDef(self, node: FunctionDef) -> SYMBOLS:
+        yield from self.visit_list(node.decorator_list)
+        yield from self.visit_optional(node.returns)
+        yield from self.visit_list(node.args.kw_defaults)
+        yield from self.visit_list(node.args.defaults)
+        self._context[node.name] = None
+        with self.scope():
+            yield from self.visit(node.args)
+            yield from self.visit_list(node.args.kwonlyargs)
+            yield from self.visit_list(node.args.args)
+            yield from self.visit_optional(node.args.kwarg)
+            yield from self.visit_optional(node.args.vararg)
+            yield from self.visit_list(node.body)
+
+    def visit_Import(self, node: Import) -> SYMBOLS:
         for alias in node.names:
             self._context[alias.asname or alias.name] = alias.name
-            for module in submodules(alias.name):
-                yield (module, node)
+            yield (alias.name, node)
 
-    def visit_ImportFrom(self, node):
-        new = {s.asname or s.name: f"{node.module}.{s.name}" for s in node.names}
-        self._context.update(new)
-        if node.module is not None:
-            for module in submodules(node.module):
-                yield (module, node)
-        for item in new.values():
-            yield (item, node)
+    def visit_ImportFrom(self, node: ImportFrom) -> SYMBOLS:
+        for alias in node.names:
+            module = node.module or ""
+            qualified = f"{module}.{alias.name}"
+            self._context[alias.asname or alias.name] = qualified
+            yield (qualified, node)
 
     # EXPRESSIONS
 
-    def visit_Attribute(self, node):
-        children = list(self.visit(node.value))
-        yield from children
-        yield from ((f"{item}.{node.attr}", node) for item, _ in children)
+    def visit_Attribute(self, node: Attribute) -> SYMBOLS:
+        for expr, _ in self.visit(node.value):
+            yield (f"{expr}.{node.attr}", node)
 
-    def visit_Name(self, node):
-        if isinstance(node.ctx, (Del, Store)):
+    def visit_Name(self, node: Name) -> SYMBOLS:
+        if isinstance(node.ctx, (Del, Param, Store)):
             self._context[node.id] = None
         name = self._context.get(node.id)
         if name is not None:
             yield (name, node)
 
 
-class BanSymbolPlugin:
-    name = "ban-symbol"
+class WarnSymbols:
+    """The flake8 plugin itself."""
+    name = "warn-symbols"
     version = "0.0.1"
-    banned = {}
+    symbols = {}
 
-    def __init__(self, tree):
+    def __init__(self, tree: AST) -> None:
         self._tree = tree
 
     @classmethod
-    def add_options(cls, parser):
-        parser.add_option("--banned-symbols", default="", parse_from_config=True)
+    def add_options(cls, parser: Any) -> None:
+        """Register the --warn-symbols options on parser."""
+        parser.add_option("--warn-symbols", default="", parse_from_config=True)
 
     @classmethod
-    def parse_options(cls, options):
-        lines = options.banned_symbols.splitlines()
+    def parse_options(cls, options: Any) -> None:
+        """Load the obsolete symbols into cls.symbols."""
+        lines = options.warn_symbols.splitlines()
         for line in lines:
             symbol, _, warning = line.partition("=")
-            cls.banned[symbol.strip()] = warning.strip()
+            cls.symbols[symbol.strip()] = warning.strip()
 
-    def run(self):
+    def run(self) -> Iterator[Tuple[int, int, str, type]]:
+        """Run the plugin."""
         visitor = QualifiedNamesVisitor()
         for symbol, node in visitor.visit(self._tree):
-            try:
-                message = self.banned[symbol]
-            except KeyError:
+            message = None
+            for module in submodules(symbol):
+                message = self.symbols.get(module, message)
+            if message is None:
                 continue
             yield (node.lineno, node.col_offset, f"B1 {message}", type(self))
+
+
+def submodules(symbol: str) -> Iterator[str]:
+    """submodules("a.b.c") -> a, a.b, a.b.c"""
+    bits = symbol.split(".")
+    for i in range(len(bits)):
+        yield ".".join(bits[:i+1])
