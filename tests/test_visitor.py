@@ -6,6 +6,16 @@ from willie import QualifiedNamesVisitor
 
 T = Sequence[Tuple[str, Collection[str]]]
 
+TEST_ANNOTATIONS: T = (
+    ("import a               ", ("a",)),
+    ("from b import T        ", ("b.T",)),
+    ("x: a.T = 1             ", ("a.T",)),
+    ("def f(a: a.T = 1) -> a:", ("a", "a.T")),
+    ("    pass               ", ()),
+    ("def T(T: T = 1) -> T:  ", ("b.T",)),
+    ("    pass               ", ())
+)
+
 TEST_SCOPES: T = (
     ("import a          ", ("a",)),
     ("from a import b   ", ("a.b",)),
@@ -13,7 +23,7 @@ TEST_SCOPES: T = (
     ("from c import d   ", ("c.d",)),
     ("del d             ", ()),
     ("def f(x=b, a=a.c):", ("a.b", "a.c")),
-    ("    _ = a.b       ", ("a.b",)),
+    ("    _ = a.b       ", ()),
     ("    a = 22        ", ()),
     ("    c = a         ", ()),
     ("    def c():      ", ()),
@@ -22,29 +32,19 @@ TEST_SCOPES: T = (
     ("a.b               ", ("a.b",))
 )
 
-TEST_ANNOTATIONS: T = (
-    ("import a               ", ("a",)),
-    ("from b import T        ", ("b.T",)),
-    ("x: a.T = 1             ", ("a.T",)),
-    ("def f(a: a.T = 1) -> a:", ("a.T",)),
-    ("    pass               ", ()),
-    ("def T(T: T = 1) -> T:  ", ("b.T",)),
-    ("    pass               ", ())
-)
-
 TESTS: Collection[T] = (
-    TEST_SCOPES, TEST_ANNOTATIONS
+    TEST_ANNOTATIONS, TEST_SCOPES
 )
 
 
 def test_visitor():
     for test in TESTS:
-        lines, symbols = zip(*test)
+        lines, symset = zip(*test)
 
         parsed = parse("\n".join(lines))
         results = QualifiedNamesVisitor().visit(parsed)
 
-        expect = {(l+1, n) for l, s in enumerate(symbols) for n in s}
+        expect = {(l+1, n) for l, s in enumerate(symset) for n in s}
         symbols = {(node.lineno, name) for name, node in results}
 
         assert symbols == expect

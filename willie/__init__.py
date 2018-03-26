@@ -58,8 +58,8 @@ class QualifiedNamesVisitor(NodeVisitor):
     # SPECIAL
 
     def visit_arg(self, node: AST) -> SYMBOLS:
-        self._context[node.arg] = None
         yield from self.visit_optional(node.annotation)
+        self._context[node.arg] = None
 
     def visit_optional(self, node: Optional[AST]) -> SYMBOLS:
         if node is not None:
@@ -73,10 +73,16 @@ class QualifiedNamesVisitor(NodeVisitor):
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> SYMBOLS:
         yield from self.visit_list(node.decorator_list)
-        yield from self.visit(node.args)
         yield from self.visit_optional(node.returns)
+        yield from self.visit_list(node.args.kw_defaults)
+        yield from self.visit_list(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
+            yield from self.visit(node.args)
+            yield from self.visit_list(node.args.kwonlyargs)
+            yield from self.visit_list(node.args.args)
+            yield from self.visit_optional(node.args.kwarg)
+            yield from self.visit_optional(node.args.vararg)
             yield from self.visit_list(node.body)
 
     def visit_ClassDef(self, node: ClassDef) -> SYMBOLS:
@@ -89,10 +95,16 @@ class QualifiedNamesVisitor(NodeVisitor):
 
     def visit_FunctionDef(self, node: FunctionDef) -> SYMBOLS:
         yield from self.visit_list(node.decorator_list)
-        yield from self.visit(node.args)
         yield from self.visit_optional(node.returns)
+        yield from self.visit_list(node.args.kw_defaults)
+        yield from self.visit_list(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
+            yield from self.visit(node.args)
+            yield from self.visit_list(node.args.kwonlyargs)
+            yield from self.visit_list(node.args.args)
+            yield from self.visit_optional(node.args.kwarg)
+            yield from self.visit_optional(node.args.vararg)
             yield from self.visit_list(node.body)
 
     def visit_Import(self, node: Import) -> SYMBOLS:
