@@ -27,7 +27,7 @@ class QualifiedNamesVisitor(NodeVisitor):
     """QualifiedNamesVisitor.visit yields a pair (qualified_name, node) for all
     qualified names it finds in the given AST.
 
-    It can handle:
+    It does handle:
         - Imports: Importing an obsolete symbol will yield it;
         - Delete statements: (del obsolete_symbol; obsolete symbol) doesn't
           yields anything;
@@ -78,7 +78,6 @@ class QualifiedNamesVisitor(NodeVisitor):
         yield from self.visit_list(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit(node.args)
             yield from self.visit_list(node.args.kwonlyargs)
             yield from self.visit_list(node.args.args)
             yield from self.visit_optional(node.args.kwarg)
@@ -100,7 +99,6 @@ class QualifiedNamesVisitor(NodeVisitor):
         yield from self.visit_list(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit(node.args)
             yield from self.visit_list(node.args.kwonlyargs)
             yield from self.visit_list(node.args.args)
             yield from self.visit_optional(node.args.kwarg)

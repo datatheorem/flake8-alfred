@@ -16,6 +16,32 @@ TEST_ANNOTATIONS: T = (
     ("    pass               ", ())
 )
 
+TEST_DELETE: T = (
+    ("from a import b", ("a.b",)),
+    ("del b          ", ()),
+    ("b              ", ())
+)
+
+TEST_EMPTY: T = (
+)
+
+TEST_HEADER: T = (
+    ("from a import b ", ("a.b",)),
+    ("def b(b: b = b):", ("a.b",)),
+    ("    pass        ", ()),
+    ("b               ", ())
+)
+
+TEST_IMPORT: T = (
+    ("import a       ", ("a",)),
+    ("import a       ", ("a",)),
+    ("from a import b", ("a.b",)),
+    ("from c import d", ("c.d",)),
+    ("from d import b", ("d.b",)),
+    ("import a       ", ("a",)),
+    ("from a import b", ("a.b",)),
+)
+
 TEST_SCOPES: T = (
     ("import a          ", ("a",)),
     ("from a import b   ", ("a.b",)),
@@ -33,7 +59,7 @@ TEST_SCOPES: T = (
 )
 
 TESTS: Collection[T] = (
-    TEST_ANNOTATIONS, TEST_SCOPES
+    TEST_ANNOTATIONS, TEST_DELETE, TEST_HEADER, TEST_IMPORT, TEST_SCOPES
 )
 
 
