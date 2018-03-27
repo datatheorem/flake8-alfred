@@ -9,5 +9,5 @@ pipelines:
           - pip install pipenv
           - pipenv install --dev
           - pipenv run flake8
-          - pipenv run mypy main.py
+          - pipenv run mypy willie
           - pipenv run pytest
