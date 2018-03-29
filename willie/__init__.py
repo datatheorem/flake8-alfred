@@ -50,6 +50,7 @@ class QualifiedNamesVisitor:
 
     @contextmanager
     def scope(self) -> Iterator[Mapping[str, Any]]:
+        """Context manager that create a new scope and delete it on exit."""
         self._context = self._context.new_child()
         try:
             yield self._context.maps[0]
@@ -57,69 +58,89 @@ class QualifiedNamesVisitor:
             self._context = self._context.parents
 
     def visit(self, node: AST) -> SYMBOLS:
+        """Equivalent to ast.NodeVisitor.visit."""
         typename = type(node).__name__
         return getattr(self, f"visit_{typename}", self.generic_visit)(node)
 
     def generic_visit(self, node: AST) -> SYMBOLS:
+        """Equivalent to ast.NodeVisitor.visit, except it chains the returned
+        iterators.
+        """
         for child in iter_child_nodes(node):
             yield from self.visit(child)
 
     # SPECIAL
 
     def visit_arg(self, node: arg) -> SYMBOLS:
+        """Visit the annotation if any, remove the symbol from the context."""
         yield from self.visit_optional(node.annotation)
         self._context[node.arg] = None
 
     def visit_optional(self, node: Optional[AST]) -> SYMBOLS:
+        """Visit an optional node."""
         if node is not None:
             yield from self.visit(node)
 
-    def visit_list(self, node: Sequence[AST]) -> SYMBOLS:
+    def visit_sequence(self, node: Sequence[AST]) -> SYMBOLS:
+        """Visit a sequence/list of nodes."""
         for item in node:
             yield from self.visit(item)
 
     # STATEMENTS
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
+        """Visit a function definition in the following order:
+            Decorators; Return annotation; Arguments default values;
+            Remove name from context; Arguments names; Function body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
         yield from self.visit_optional(node.returns)
-        yield from self.visit_list(node.args.kw_defaults)
-        yield from self.visit_list(node.args.defaults)
+        yield from self.visit_sequence(node.args.kw_defaults)
+        yield from self.visit_sequence(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit_list(node.args.kwonlyargs)
-            yield from self.visit_list(node.args.args)
+            yield from self.visit_sequence(node.args.kwonlyargs)
+            yield from self.visit_sequence(node.args.args)
             yield from self.visit_optional(node.args.kwarg)
             yield from self.visit_optional(node.args.vararg)
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_ClassDef(self, node: ClassDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
-        yield from self.visit_list(node.bases)
-        yield from self.visit_list(node.keywords)
+        """Visit in the following order:
+            Decorators; Base classes; Keywords; Remove name from context; Body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
+        yield from self.visit_sequence(node.bases)
+        yield from self.visit_sequence(node.keywords)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_FunctionDef(self, node: FunctionDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
+        """Visit a function definition in the following order:
+            Decorators; Return annotation; Arguments default values;
+            Remove name from context; Arguments names; Function body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
         yield from self.visit_optional(node.returns)
-        yield from self.visit_list(node.args.kw_defaults)
-        yield from self.visit_list(node.args.defaults)
+        yield from self.visit_sequence(node.args.kw_defaults)
+        yield from self.visit_sequence(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit_list(node.args.kwonlyargs)
-            yield from self.visit_list(node.args.args)
+            yield from self.visit_sequence(node.args.kwonlyargs)
+            yield from self.visit_sequence(node.args.args)
             yield from self.visit_optional(node.args.kwarg)
             yield from self.visit_optional(node.args.vararg)
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_Import(self, node: Import) -> SYMBOLS:
+        """Add the module to the current context."""
         for alias in node.names:
             self._context[alias.asname or alias.name] = alias.name
             yield (alias.name, node)
 
     def visit_ImportFrom(self, node: ImportFrom) -> SYMBOLS:
+        """Add the symbols to the current context."""
         for alias in node.names:
             module = node.module or ""
             qualified = f"{module}.{alias.name}"
@@ -129,10 +150,14 @@ class QualifiedNamesVisitor:
     # EXPRESSIONS
 
     def visit_Attribute(self, node: Attribute) -> SYMBOLS:
+        """Postfix the seen symbols."""
         for lhs, _ in self.visit(node.value):
             yield (f"{lhs}.{node.attr}", node)
 
     def visit_Name(self, node: Name) -> SYMBOLS:
+        """If the symbol is getting overwritten, then delete it from the
+        context, else yield it if it's known in this context.
+        """
         if isinstance(node.ctx, (Del, Param, Store)):
             self._context[node.id] = None
         name = self._context.get(node.id)
@@ -175,7 +200,7 @@ class WarnSymbols:
 
 
 def submodules(symbol: str) -> Iterator[str]:
-    """submodules("a.b.c") -> a, a.b, a.b.c"""
+    """submodules("a.b.c") yields "a", then "a.b", then "a.b.c"."""
     bits = symbol.split(".")
     for i in range(len(bits)):
         yield ".".join(bits[:i+1])
