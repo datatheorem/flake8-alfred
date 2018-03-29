@@ -5,6 +5,8 @@ import builtins
 from ast import (
     # Generic AST type
     AST,
+    # Special
+    arg, expr, stmt,
     # Statements
     AsyncFunctionDef, ClassDef, FunctionDef, Import, ImportFrom,
     # Expressions
@@ -12,18 +14,21 @@ from ast import (
     # Expression context
     Del, Param, Store,
     # Visitors
-    NodeVisitor, iter_child_nodes
+    iter_child_nodes
+)
+
+from typing import (
+    Any, Dict, Iterator, Mapping, Optional, Sequence, Tuple, Union
 )
 
 from collections import ChainMap
 from contextlib import contextmanager
-from typing import Any, Iterator, MutableMapping, Optional, Sequence, Tuple
 
 
-SYMBOLS = Iterator[Tuple[str, AST]]
+SYMBOLS = Iterator[Tuple[str, Union[expr, stmt]]]
 
 
-class QualifiedNamesVisitor(NodeVisitor):
+class QualifiedNamesVisitor:
     """QualifiedNamesVisitor.visit yields a pair (qualified_name, node) for all
     qualified names it finds in the given AST.
 
@@ -44,12 +49,16 @@ class QualifiedNamesVisitor(NodeVisitor):
         self._context = ChainMap(dict(zip(init, init)))
 
     @contextmanager
-    def scope(self) -> Iterator[MutableMapping[str, Any]]:
+    def scope(self) -> Iterator[Mapping[str, Any]]:
         self._context = self._context.new_child()
         try:
             yield self._context.maps[0]
         finally:
             self._context = self._context.parents
+
+    def visit(self, node: AST) -> SYMBOLS:
+        typename = type(node).__name__
+        return getattr(self, f"visit_{typename}", self.generic_visit)(node)
 
     def generic_visit(self, node: AST) -> SYMBOLS:
         for child in iter_child_nodes(node):
@@ -57,7 +66,7 @@ class QualifiedNamesVisitor(NodeVisitor):
 
     # SPECIAL
 
-    def visit_arg(self, node: AST) -> SYMBOLS:
+    def visit_arg(self, node: arg) -> SYMBOLS:
         yield from self.visit_optional(node.annotation)
         self._context[node.arg] = None
 
@@ -120,8 +129,8 @@ class QualifiedNamesVisitor(NodeVisitor):
     # EXPRESSIONS
 
     def visit_Attribute(self, node: Attribute) -> SYMBOLS:
-        for expr, _ in self.visit(node.value):
-            yield (f"{expr}.{node.attr}", node)
+        for lhs, _ in self.visit(node.value):
+            yield (f"{lhs}.{node.attr}", node)
 
     def visit_Name(self, node: Name) -> SYMBOLS:
         if isinstance(node.ctx, (Del, Param, Store)):
@@ -133,9 +142,9 @@ class QualifiedNamesVisitor(NodeVisitor):
 
 class WarnSymbols:
     """The flake8 plugin itself."""
-    name = "warn-symbols"
-    version = "0.0.1"
-    symbols = {}
+    name: str = "warn-symbols"
+    version: str = "0.0.1"
+    symbols: Dict[str, str] = {}
 
     def __init__(self, tree: AST) -> None:
         self._tree = tree
