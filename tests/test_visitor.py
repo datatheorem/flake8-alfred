@@ -38,6 +38,7 @@ TESTS: Collection[T] = (
 
 
 def test_visitor():
+    # TODO(AD): Please add comments here to explain what the tests are doing; it is not obvious to the uninformed reader (like me). I think it mimicks the AST you get from flake8?
     for test in TESTS:
         lines, symset = zip(*test)
 

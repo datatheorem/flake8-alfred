@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator, MutableMapping, Optional, Sequence, Tuple
 
 
+# TODO(AD): Good use of a custom type to document/clarify the code. Why all uppercase tho? Let's switch to normal case (like the other types/classes - AST is in my opinion poorly named) as initally i thought this was a constant when seeing it in other parts of the code (like SYMBOLS = 1)
 SYMBOLS = Iterator[Tuple[str, AST]]
 
 
@@ -40,9 +41,11 @@ class QualifiedNamesVisitor(NodeVisitor):
     on the right hand side.
     """
     def __init__(self) -> None:
+        # TODO(AD): These 2 lines are difficult to understand (there is too much going on in 2 lines) - can you simplify and add a comment? What is it doing and why? What is context?
         init = dir(builtins)
         self._context = ChainMap(dict(zip(init, init)))
 
+    # TODO(AD): Explain what this context manager does - or is it a flake8 thing?
     @contextmanager
     def scope(self) -> Iterator[MutableMapping[str, Any]]:
         self._context = self._context.new_child()
@@ -136,6 +139,8 @@ class QualifiedNamesVisitor(NodeVisitor):
 class WarnSymbols:
     """The flake8 plugin itself."""
     name = "warn-symbols"
+    # TODO(AD): This version number is likely to get out of sync with the one in setup.cfg. Can you make them one? It is good practice to put the module's version number in module/__init__.py as __version__
+    # TODO(AD): Also for hardcoded attributes we use names all uppercase (like SYMBOLS)
     version = "0.0.1"
     symbols = {}
 
@@ -153,20 +158,24 @@ class WarnSymbols:
         lines = options.warn_symbols.splitlines()
         for line in lines:
             symbol, _, warning = line.partition("=")
+            # TODO(AD): Is this interface required by flake8? Putting and changing stuff in a class attribute (cls.symbol) seems dangerous as it is not safe if multiple callers call parse_options(). Is this something that could happen? If not (or if it is how flake8 wants plugins to be designed) please add a comment explaining why. If it can happen and flake8 allows this, i think the symbols to check for should be an instance attribute instead of a class attribute (it would work like this here: return cls(symbols)), but I don't know how flake8 plugins work :)
             cls.symbols[symbol.strip()] = warning.strip()
 
     def run(self) -> Iterator[Tuple[int, int, str, type]]:
         """Run the plugin."""
+        # TODO(AD): Add comments for each major step of this method
         visitor = QualifiedNamesVisitor()
         for symbol, node in visitor.visit(self._tree):
             message = None
             for module in submodules(symbol):
+                # TODO(AD): Let's rename message to error_message (I was confused for a minute)
                 message = self.symbols.get(module, message)
             if message is None:
                 continue
             yield (node.lineno, node.col_offset, f"B1 {message}", type(self))
 
 
+# TODO(AD): Yielding here seems overkill; not a big deal but it makes the code slightly harder to read - let's just return a list?
 def submodules(symbol: str) -> Iterator[str]:
     """submodules("a.b.c") -> a, a.b, a.b.c"""
     bits = symbol.split(".")
