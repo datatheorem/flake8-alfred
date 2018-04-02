@@ -7,13 +7,44 @@ from willie import QualifiedNamesVisitor
 T = Sequence[Tuple[str, Collection[str]]]
 
 TEST_ANNOTATIONS: T = (
-    ("import a               ", ("a",)),
-    ("from b import T        ", ("b.T",)),
-    ("x: a.T = 1             ", ("a.T",)),
-    ("def f(a: a.T = 1) -> a:", ("a", "a.T")),
-    ("    pass               ", ()),
-    ("def T(T: T = 1) -> T:  ", ("b.T",)),
-    ("    pass               ", ())
+    ("import a             ", ("a",)),
+    ("from b import T      ", ("b.T",)),
+    ("x: a.T = 1           ", ("a.T",)),
+    ("def a(T: T = 1) -> a:", ("b.T", "a")),
+    ("    pass             ", ())
+)
+
+TEST_DELETE: T = (
+    ("from a import b", ("a.b",)),
+    ("del b          ", ()),
+    ("b              ", ())
+)
+
+TEST_HEADER: T = (
+    ("from a import b ", ("a.b",)),
+    ("def b(b: b = b):", ("a.b",)),
+    ("    pass        ", ()),
+)
+
+TEST_IMPORT: T = (
+    ("import a       ", ("a",)),
+    ("import a       ", ("a",)),
+    ("from a import b", ("a.b",)),
+    ("from c import d", ("c.d",)),
+    ("from d import b", ("d.b",)),
+    ("import a       ", ("a",)),
+    ("from a import b", ("a.b",)),
+)
+
+TEST_OVERWRITE: T = (
+    ("from m import a, b, c, d", ("m.a", "m.b", "m.c", "m.d")),
+    ("a, b, c, d              ", ("m.a", "m.b", "m.c", "m.d")),
+    ("a = 1                   ", ()),
+    ("a, b, c, d              ", ("m.b", "m.c", "m.d")),
+    ("def b(c: d):            ", ("m.d",)),
+    ("    a, b, c, d          ", ("m.d",)),
+    ("class c:                ", ()),
+    ("    a = d               ", ("m.d",))
 )
 
 TEST_SCOPES: T = (
@@ -33,7 +64,12 @@ TEST_SCOPES: T = (
 )
 
 TESTS: Collection[T] = (
-    TEST_ANNOTATIONS, TEST_SCOPES
+    TEST_ANNOTATIONS,
+    TEST_DELETE,
+    TEST_HEADER,
+    TEST_IMPORT,
+    TEST_OVERWRITE,
+    TEST_SCOPES
 )
 
 
