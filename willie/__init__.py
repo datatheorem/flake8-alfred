@@ -5,6 +5,8 @@ import builtins
 from ast import (
     # Generic AST type
     AST,
+    # Special
+    arg, expr, stmt,
     # Statements
     AsyncFunctionDef, ClassDef, FunctionDef, Import, ImportFrom,
     # Expressions
@@ -12,23 +14,26 @@ from ast import (
     # Expression context
     Del, Param, Store,
     # Visitors
-    NodeVisitor, iter_child_nodes
+    iter_child_nodes
+)
+
+from typing import (
+    Any, Dict, Iterator, Mapping, Optional, Sequence, Tuple, Union
 )
 
 from collections import ChainMap
 from contextlib import contextmanager
-from typing import Any, Iterator, MutableMapping, Optional, Sequence, Tuple
 
 
 # TODO(AD): Good use of a custom type to document/clarify the code. Why all uppercase tho? Let's switch to normal case (like the other types/classes - AST is in my opinion poorly named) as initally i thought this was a constant when seeing it in other parts of the code (like SYMBOLS = 1)
-SYMBOLS = Iterator[Tuple[str, AST]]
+SYMBOLS = Iterator[Tuple[str, Union[expr, stmt]]]
 
 
-class QualifiedNamesVisitor(NodeVisitor):
+class QualifiedNamesVisitor:
     """QualifiedNamesVisitor.visit yields a pair (qualified_name, node) for all
     qualified names it finds in the given AST.
 
-    It can handle:
+    It does handle:
         - Imports: Importing an obsolete symbol will yield it;
         - Delete statements: (del obsolete_symbol; obsolete symbol) doesn't
           yields anything;
@@ -47,75 +52,98 @@ class QualifiedNamesVisitor(NodeVisitor):
 
     # TODO(AD): Explain what this context manager does - or is it a flake8 thing?
     @contextmanager
-    def scope(self) -> Iterator[MutableMapping[str, Any]]:
+    def scope(self) -> Iterator[Mapping[str, Any]]:
+        """Context manager that create a new scope and delete it on exit."""
         self._context = self._context.new_child()
         try:
             yield self._context.maps[0]
         finally:
             self._context = self._context.parents
 
+    def visit(self, node: AST) -> SYMBOLS:
+        """Equivalent to ast.NodeVisitor.visit."""
+        typename = type(node).__name__
+        return getattr(self, f"visit_{typename}", self.generic_visit)(node)
+
     def generic_visit(self, node: AST) -> SYMBOLS:
+        """Equivalent to ast.NodeVisitor.visit, except it chains the returned
+        iterators.
+        """
         for child in iter_child_nodes(node):
             yield from self.visit(child)
 
     # SPECIAL
 
-    def visit_arg(self, node: AST) -> SYMBOLS:
+    def visit_arg(self, node: arg) -> SYMBOLS:
+        """Visit the annotation if any, remove the symbol from the context."""
         yield from self.visit_optional(node.annotation)
         self._context[node.arg] = None
 
     def visit_optional(self, node: Optional[AST]) -> SYMBOLS:
+        """Visit an optional node."""
         if node is not None:
             yield from self.visit(node)
 
-    def visit_list(self, node: Sequence[AST]) -> SYMBOLS:
+    def visit_sequence(self, node: Sequence[AST]) -> SYMBOLS:
+        """Visit a sequence/list of nodes."""
         for item in node:
             yield from self.visit(item)
 
     # STATEMENTS
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
+        """Visit a function definition in the following order:
+            Decorators; Return annotation; Arguments default values;
+            Remove name from context; Arguments names; Function body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
         yield from self.visit_optional(node.returns)
-        yield from self.visit_list(node.args.kw_defaults)
-        yield from self.visit_list(node.args.defaults)
+        yield from self.visit_sequence(node.args.kw_defaults)
+        yield from self.visit_sequence(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit(node.args)
-            yield from self.visit_list(node.args.kwonlyargs)
-            yield from self.visit_list(node.args.args)
+            yield from self.visit_sequence(node.args.kwonlyargs)
+            yield from self.visit_sequence(node.args.args)
             yield from self.visit_optional(node.args.kwarg)
             yield from self.visit_optional(node.args.vararg)
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_ClassDef(self, node: ClassDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
-        yield from self.visit_list(node.bases)
-        yield from self.visit_list(node.keywords)
+        """Visit in the following order:
+            Decorators; Base classes; Keywords; Remove name from context; Body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
+        yield from self.visit_sequence(node.bases)
+        yield from self.visit_sequence(node.keywords)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_FunctionDef(self, node: FunctionDef) -> SYMBOLS:
-        yield from self.visit_list(node.decorator_list)
+        """Visit a function definition in the following order:
+            Decorators; Return annotation; Arguments default values;
+            Remove name from context; Arguments names; Function body.
+        """
+        yield from self.visit_sequence(node.decorator_list)
         yield from self.visit_optional(node.returns)
-        yield from self.visit_list(node.args.kw_defaults)
-        yield from self.visit_list(node.args.defaults)
+        yield from self.visit_sequence(node.args.kw_defaults)
+        yield from self.visit_sequence(node.args.defaults)
         self._context[node.name] = None
         with self.scope():
-            yield from self.visit(node.args)
-            yield from self.visit_list(node.args.kwonlyargs)
-            yield from self.visit_list(node.args.args)
+            yield from self.visit_sequence(node.args.kwonlyargs)
+            yield from self.visit_sequence(node.args.args)
             yield from self.visit_optional(node.args.kwarg)
             yield from self.visit_optional(node.args.vararg)
-            yield from self.visit_list(node.body)
+            yield from self.visit_sequence(node.body)
 
     def visit_Import(self, node: Import) -> SYMBOLS:
+        """Add the module to the current context."""
         for alias in node.names:
             self._context[alias.asname or alias.name] = alias.name
             yield (alias.name, node)
 
     def visit_ImportFrom(self, node: ImportFrom) -> SYMBOLS:
+        """Add the symbols to the current context."""
         for alias in node.names:
             module = node.module or ""
             qualified = f"{module}.{alias.name}"
@@ -125,10 +153,14 @@ class QualifiedNamesVisitor(NodeVisitor):
     # EXPRESSIONS
 
     def visit_Attribute(self, node: Attribute) -> SYMBOLS:
-        for expr, _ in self.visit(node.value):
-            yield (f"{expr}.{node.attr}", node)
+        """Postfix the seen symbols."""
+        for lhs, _ in self.visit(node.value):
+            yield (f"{lhs}.{node.attr}", node)
 
     def visit_Name(self, node: Name) -> SYMBOLS:
+        """If the symbol is getting overwritten, then delete it from the
+        context, else yield it if it's known in this context.
+        """
         if isinstance(node.ctx, (Del, Param, Store)):
             self._context[node.id] = None
         name = self._context.get(node.id)
@@ -143,6 +175,9 @@ class WarnSymbols:
     # TODO(AD): Also for hardcoded attributes we use names all uppercase (like SYMBOLS)
     version = "0.0.1"
     symbols = {}
+    name: str = "warn-symbols"
+    version: str = "0.0.1"
+    symbols: Dict[str, str] = {}
 
     def __init__(self, tree: AST) -> None:
         self._tree = tree
@@ -177,7 +212,7 @@ class WarnSymbols:
 
 # TODO(AD): Yielding here seems overkill; not a big deal but it makes the code slightly harder to read - let's just return a list?
 def submodules(symbol: str) -> Iterator[str]:
-    """submodules("a.b.c") -> a, a.b, a.b.c"""
+    """submodules("a.b.c") yields "a", then "a.b", then "a.b.c"."""
     bits = symbol.split(".")
     for i in range(len(bits)):
         yield ".".join(bits[:i+1])
