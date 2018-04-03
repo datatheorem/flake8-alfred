@@ -1,7 +1,7 @@
 from ast import parse
 from typing import Collection, Sequence, Tuple
 
-from willie import QualifiedNamesVisitor
+from alfred import QualifiedNamesVisitor
 
 
 T = Sequence[Tuple[str, Collection[str]]]
@@ -74,13 +74,21 @@ TESTS: Collection[T] = (
 
 
 def test_visitor():
-    # TODO(AD): Please add comments here to explain what the tests are doing; it is not obvious to the uninformed reader (like me). I think it mimicks the AST you get from flake8?
+    """Build an AST from the tests in TESTS, compare the actual output with
+    the expected output.
+    """
     for test in TESTS:
+        # Transpose test. We now have a sequence of code lines, and another for
+        # expected symbols on a given line.
         lines, symset = zip(*test)
 
+        # Concat the code lines, separating them by a newline, and visit the
+        # resulting code.
         parsed = parse("\n".join(lines))
         results = QualifiedNamesVisitor().visit(parsed)
 
+        # Build a set of (line, expected symbols) from symset.
+        # symbols is the actual output.
         expect = {(l+1, n) for l, s in enumerate(symset) for n in s}
         symbols = {(node.lineno, name) for name, node in results}
 
