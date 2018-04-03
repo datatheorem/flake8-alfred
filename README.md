@@ -1,5 +1,5 @@
-Alfred the buttler
-==================
+Alfred the butler
+=================
 
 Willie has left, he's now in Scotland. Alfred replaced him.
 
