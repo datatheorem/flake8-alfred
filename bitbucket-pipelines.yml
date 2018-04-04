@@ -8,6 +8,7 @@ pipelines:
         script:
           - pip install pipenv
           - pipenv install --dev
+          - pipenv install -e .
           - pipenv run flake8
           - pipenv run mypy alfred
           - pipenv run pytest
