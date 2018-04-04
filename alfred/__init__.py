@@ -6,7 +6,7 @@ from ast import (
     # Generic AST type
     AST,
     # Special
-    arg, expr, stmt,
+    arg, ExceptHandler, expr, stmt,
     # Statements
     AsyncFunctionDef, ClassDef, FunctionDef, Import, ImportFrom,
     # Expressions
@@ -86,6 +86,15 @@ class QualifiedNamesVisitor:
         """Visit the annotation if any, remove the symbol from the context."""
         yield from self.visit_optional(node.annotation)
         self._scopes[node.arg] = None
+
+    def visit_ExceptHandler(self, node: ExceptHandler) -> Symbols:
+        """Visit the exception type, remove the alias from the context then
+        visit the body.
+        """
+        yield from self.visit_optional(node.type)
+        if node.name is not None:
+            self._scopes[node.name] = None
+        yield from self.visit_sequence(node.body)
 
     def visit_optional(self, node: Optional[AST]) -> Symbols:
         """Visit an optional node."""

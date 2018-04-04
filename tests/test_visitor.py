@@ -20,6 +20,15 @@ TEST_DELETE: T = (
     ("b              ", ())
 )
 
+TEST_EXCEPT: T = (
+    ("from a import b        ", ("a.b",)),
+    ("try:                   ", ()),
+    ("    raise ValueError() ", ("ValueError",)),
+    ("except ValueError as b:", ("ValueError",)),
+    ("    pass               ", ()),
+    ("b                      ", ())
+)
+
 TEST_HEADER: T = (
     ("from a import b ", ("a.b",)),
     ("def b(b: b = b):", ("a.b",)),
@@ -66,6 +75,7 @@ TEST_SCOPES: T = (
 TESTS: Collection[T] = (
     TEST_ANNOTATIONS,
     TEST_DELETE,
+    TEST_EXCEPT,
     TEST_HEADER,
     TEST_IMPORT,
     TEST_OVERWRITE,
