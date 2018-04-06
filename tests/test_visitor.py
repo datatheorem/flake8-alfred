@@ -1,7 +1,7 @@
 from ast import parse
 from typing import Collection, Sequence, Tuple
 
-from willie import QualifiedNamesVisitor
+from alfred import QualifiedNamesVisitor
 
 
 T = Sequence[Tuple[str, Collection[str]]]
@@ -18,6 +18,15 @@ TEST_DELETE: T = (
     ("from a import b", ("a.b",)),
     ("del b          ", ()),
     ("b              ", ())
+)
+
+TEST_EXCEPT: T = (
+    ("from a import b        ", ("a.b",)),
+    ("try:                   ", ()),
+    ("    raise ValueError() ", ("ValueError",)),
+    ("except ValueError as b:", ("ValueError",)),
+    ("    pass               ", ()),
+    ("b                      ", ())
 )
 
 TEST_HEADER: T = (
@@ -66,6 +75,7 @@ TEST_SCOPES: T = (
 TESTS: Collection[T] = (
     TEST_ANNOTATIONS,
     TEST_DELETE,
+    TEST_EXCEPT,
     TEST_HEADER,
     TEST_IMPORT,
     TEST_OVERWRITE,
@@ -74,12 +84,21 @@ TESTS: Collection[T] = (
 
 
 def test_visitor():
+    """Build an AST from the tests in TESTS, compare the actual output with
+    the expected output.
+    """
     for test in TESTS:
+        # Transpose test. We now have a sequence of code lines, and another for
+        # expected symbols on a given line.
         lines, symset = zip(*test)
 
+        # Concat the code lines, separating them by a newline, and visit the
+        # resulting code.
         parsed = parse("\n".join(lines))
         results = QualifiedNamesVisitor().visit(parsed)
 
+        # Build a set of (line, expected symbols) from symset.
+        # symbols is the actual output.
         expect = {(l+1, n) for l, s in enumerate(symset) for n in s}
         symbols = {(node.lineno, name) for name, node in results}
 
