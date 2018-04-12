@@ -77,16 +77,6 @@ class SymbolsVisitor(Visitor):
         for child in iter_child_nodes(node):
             yield from self.visit(child)
 
-    def visit_optional(self, node: Optional[AST]) -> Symbols:
-        """Visit an optional node."""
-        if node is not None:
-            yield from self.visit(node)
-
-    def visit_sequence(self, node: Sequence[AST]) -> Symbols:
-        """Visit a sequence/list of nodes."""
-        for item in node:
-            yield from self.visit(item)
-
 
 class WarnSymbols:
     """The flake8 plugin itself."""
@@ -134,13 +124,28 @@ class WarnSymbols:
             yield (node.lineno, node.col_offset, f"B1 {warning}", type(self))
 
 
+# HELPERS
+
+
+def visit_optional(vtor: Visitor, node: Optional[Any]) -> Iterator[Any]:
+    """Visit an optional node."""
+    if node is not None:
+        yield from vtor.visit(node)
+
+
+def visit_sequence(vtor: Visitor, node: Sequence[Any]) -> Iterator[Any]:
+    """Visit a sequence/list of nodes."""
+    for item in node:
+        yield from vtor.visit(item)
+
+
 # SPECIAL
 
 
 @SymbolsVisitor.on(arg)
 def visit_arg(vtor: SymbolsVisitor, node: arg) -> Symbols:
     """Visit the annotation if any, remove the symbol from the context."""
-    yield from vtor.visit_optional(node.annotation)
+    yield from visit_optional(vtor, node.annotation)
     vtor.scopes[node.arg] = None
 
 
@@ -149,10 +154,10 @@ def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
     """Visit the exception type, remove the alias from the context then
     visit the body.
     """
-    yield from vtor.visit_optional(node.type)
+    yield from visit_optional(vtor, node.type)
     if node.name is not None:
         vtor.scopes[node.name] = None
-    yield from vtor.visit_sequence(node.body)
+    yield from visit_sequence(vtor, node.body)
 
 
 # STATEMENTS
@@ -165,17 +170,17 @@ def visit_async_function_def(vtor: SymbolsVisitor, node: Function) -> Symbols:
         Decorators; Return annotation; Arguments default values;
         Remove name from context; Arguments names; Function body.
     """
-    yield from vtor.visit_sequence(node.decorator_list)
-    yield from vtor.visit_optional(node.returns)
-    yield from vtor.visit_sequence(node.args.kw_defaults)
-    yield from vtor.visit_sequence(node.args.defaults)
+    yield from visit_sequence(vtor, node.decorator_list)
+    yield from visit_optional(vtor, node.returns)
+    yield from visit_sequence(vtor, node.args.kw_defaults)
+    yield from visit_sequence(vtor, node.args.defaults)
     vtor.scopes[node.name] = None
     with vtor.scope():
-        yield from vtor.visit_sequence(node.args.kwonlyargs)
-        yield from vtor.visit_sequence(node.args.args)
-        yield from vtor.visit_optional(node.args.kwarg)
-        yield from vtor.visit_optional(node.args.vararg)
-        yield from vtor.visit_sequence(node.body)
+        yield from visit_sequence(vtor, node.args.kwonlyargs)
+        yield from visit_sequence(vtor, node.args.args)
+        yield from visit_optional(vtor, node.args.kwarg)
+        yield from visit_optional(vtor, node.args.vararg)
+        yield from visit_sequence(vtor, node.body)
 
 
 @SymbolsVisitor.on(ClassDef)
@@ -183,12 +188,12 @@ def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
     """Visit in the following order:
         Decorators; Base classes; Keywords; Remove name from context; Body.
     """
-    yield from vtor.visit_sequence(node.decorator_list)
-    yield from vtor.visit_sequence(node.bases)
-    yield from vtor.visit_sequence(node.keywords)
+    yield from visit_sequence(vtor, node.decorator_list)
+    yield from visit_sequence(vtor, node.bases)
+    yield from visit_sequence(vtor, node.keywords)
     vtor.scopes[node.name] = None
     with vtor.scope():
-        yield from vtor.visit_sequence(node.body)
+        yield from visit_sequence(vtor, node.body)
 
 
 @SymbolsVisitor.on(Import)
