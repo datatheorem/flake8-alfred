@@ -1,7 +1,7 @@
 from ast import parse
 from typing import Collection, Sequence, Tuple
 
-from alfred import QualifiedNamesVisitor
+from alfred import SymbolsVisitor
 
 
 T = Sequence[Tuple[str, Collection[str]]]
@@ -95,7 +95,7 @@ def test_visitor():
         # Concat the code lines, separating them by a newline, and visit the
         # resulting code.
         parsed = parse("\n".join(lines))
-        results = QualifiedNamesVisitor().visit(parsed)
+        results = SymbolsVisitor().visit(parsed)
 
         # Build a set of (line, expected symbols) from symset.
         # symbols is the actual output.
