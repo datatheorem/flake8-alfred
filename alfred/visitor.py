@@ -2,17 +2,16 @@
 
 from collections import ChainMap
 from operator import attrgetter
+from types import MappingProxyType
 
 from typing import (
-    Any, Callable, ChainMap as ChainMapT, Hashable, Iterable, Optional,
-    TypeVar, Union
+    Any, Callable, ChainMap as ChainMapT, Hashable, Mapping,
+    MutableMapping, Optional, Tuple, TypeVar
 )
 
 
 ScopeT = ChainMapT[str, Optional[str]]
-
 T = TypeVar("T")
-U = TypeVar("U")
 
 
 class RegisterMeta(type):
@@ -20,21 +19,37 @@ class RegisterMeta(type):
     have a `_register` attribute visible to their subclasses, that's a mapping
     of arbitrary keys and values.
     """
-    def __new__(mcs, name, bases, namespace, **kwargs):  # type: ignore
+    def __new__(mcs, name, bases, namespace, **kwargs):     # type: ignore
         parents = map(attrgetter("_register"), bases)
         register = ChainMap({}, *parents)
         namespace["_register"] = register
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
-    def register(cls, key: Hashable) -> Callable[[T], T]:
+    def register(cls) -> Tuple[MutableMapping, Mapping]:
+        """Returns this class register as a dict, and its parent's as a
+        `MappingProxyType`.
+        """
+        register = cls._register                           # type: ignore
+        return register.maps[0], MappingProxyType(register.parents)
+
+
+class Dispatcher(metaclass=RegisterMeta):
+    """Dispatcher base class."""
+    @classmethod
+    def dispatch(cls, key: Hashable) -> Any:
+        """Returns the item associated with `key` or raise `KeyError`."""
+        return cls._register[key]                          # type: ignore
+
+    @classmethod
+    def on(cls, key: Hashable) -> Callable[[T], T]:
         """Register a value into the `_register` class attribute."""
         def _wrapper(value: T) -> T:
-            cls._register[key] = value
+            cls._register[key] = value                     # type: ignore
             return value
         return _wrapper
 
 
-class Visitor(metaclass=RegisterMeta):
+class Visitor(Dispatcher):
     """Visitor base class."""
     def generic_visit(self, node: Any) -> Any:
         """Generic visitor for nodes of unknown type. The default
@@ -46,14 +61,11 @@ class Visitor(metaclass=RegisterMeta):
         """Visits a node by calling the registered function for this type of
         nodes.
         """
-        cls = first(type(node).mro(), predicate=self._register.__contains__)
-        if cls is None:
-            return self.generic_visit(node)
-        return self._register[cls](self, node)
-
-
-def first(iterable: Iterable[T],
-          predicate: Callable[[T], Any] = None,
-          default: U = None) -> Union[T, U, None]:
-    """Returns the first item for which predicate is true, or default."""
-    return next(filter(predicate, iterable), default)
+        for base in type(node).mro():
+            try:
+                function = type(self).dispatch(base)
+            except KeyError:
+                pass
+            else:
+                return function(self, node)
+        return self.generic_visit(node)

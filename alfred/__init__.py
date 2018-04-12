@@ -137,14 +137,14 @@ class WarnSymbols:
 # SPECIAL
 
 
-@SymbolsVisitor.register(arg)
+@SymbolsVisitor.on(arg)
 def visit_arg(vtor: SymbolsVisitor, node: arg) -> Symbols:
     """Visit the annotation if any, remove the symbol from the context."""
     yield from vtor.visit_optional(node.annotation)
     vtor.scopes[node.arg] = None
 
 
-@SymbolsVisitor.register(ExceptHandler)
+@SymbolsVisitor.on(ExceptHandler)
 def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
     """Visit the exception type, remove the alias from the context then
     visit the body.
@@ -158,8 +158,8 @@ def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
 # STATEMENTS
 
 
-@SymbolsVisitor.register(AsyncFunctionDef)
-@SymbolsVisitor.register(FunctionDef)
+@SymbolsVisitor.on(AsyncFunctionDef)
+@SymbolsVisitor.on(FunctionDef)
 def visit_async_function_def(vtor: SymbolsVisitor, node: Function) -> Symbols:
     """Visit a function definition in the following order:
         Decorators; Return annotation; Arguments default values;
@@ -178,7 +178,7 @@ def visit_async_function_def(vtor: SymbolsVisitor, node: Function) -> Symbols:
         yield from vtor.visit_sequence(node.body)
 
 
-@SymbolsVisitor.register(ClassDef)
+@SymbolsVisitor.on(ClassDef)
 def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
     """Visit in the following order:
         Decorators; Base classes; Keywords; Remove name from context; Body.
@@ -191,7 +191,7 @@ def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
         yield from vtor.visit_sequence(node.body)
 
 
-@SymbolsVisitor.register(Import)
+@SymbolsVisitor.on(Import)
 def visit_import(vtor: SymbolsVisitor, node: Import) -> Symbols:
     """Add the module to the current context."""
     for alias in node.names:
@@ -199,7 +199,7 @@ def visit_import(vtor: SymbolsVisitor, node: Import) -> Symbols:
         yield (alias.name, node)
 
 
-@SymbolsVisitor.register(ImportFrom)
+@SymbolsVisitor.on(ImportFrom)
 def visit_import_from(vtor: SymbolsVisitor, node: ImportFrom) -> Symbols:
     """Add the symbols to the current context."""
     for alias in node.names:
@@ -212,14 +212,14 @@ def visit_import_from(vtor: SymbolsVisitor, node: ImportFrom) -> Symbols:
 # EXPRESSIONS
 
 
-@SymbolsVisitor.register(Attribute)
+@SymbolsVisitor.on(Attribute)
 def visit_attribute(vtor: SymbolsVisitor, node: Attribute) -> Symbols:
     """Postfix the seen symbols."""
     for lhs, _ in vtor.visit(node.value):
         yield (f"{lhs}.{node.attr}", node)
 
 
-@SymbolsVisitor.register(Name)
+@SymbolsVisitor.on(Name)
 def visit_name(vtor: SymbolsVisitor, node: Name) -> Symbols:
     """If the symbol is getting overwritten, then delete it from the context,
     else yield it if it's known in this context.
