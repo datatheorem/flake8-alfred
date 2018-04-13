@@ -1,12 +1,10 @@
-"""Flake8 plugin emitting warning for obsolete symbols."""
+"""Generic implementation of the Visitor and Dispatcher patterns."""
 
 from collections import ChainMap
 from operator import attrgetter
-from types import MappingProxyType
 
 from typing import (
-    Any, Callable, ChainMap as ChainMapT, Hashable, Mapping,
-    MutableMapping, Optional, Tuple, TypeVar
+    Any, Callable, ChainMap as ChainMapT, Hashable, Optional, TypeVar
 )
 
 
@@ -19,18 +17,18 @@ class RegisterMeta(type):
     have a `_register` attribute visible to their subclasses, that's a mapping
     of arbitrary keys and values.
     """
-    def __new__(mcs, name, bases, namespace, **kwargs):     # type: ignore
+    def __new__(mcs, name, bases, namespace, **kwargs):    # type: ignore
         parents = map(attrgetter("_register"), bases)
         register = ChainMap({}, *parents)
         namespace["_register"] = register
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
-    def register(cls) -> Tuple[MutableMapping, Mapping]:
+    @property
+    def register(cls) -> ChainMapT[Hashable, Any]:
         """Returns this class register as a dict, and its parent's as a
         `MappingProxyType`.
         """
-        register = cls._register                           # type: ignore
-        return register.maps[0], MappingProxyType(register.parents)
+        return cls._register                               # type: ignore
 
 
 class Dispatcher(metaclass=RegisterMeta):
@@ -38,13 +36,13 @@ class Dispatcher(metaclass=RegisterMeta):
     @classmethod
     def dispatch(cls, key: Hashable) -> Any:
         """Returns the item associated with `key` or raise `KeyError`."""
-        return cls._register[key]                          # type: ignore
+        return cls.register[key]
 
     @classmethod
     def on(cls, key: Hashable) -> Callable[[T], T]:
         """Register a value into the `_register` class attribute."""
         def _wrapper(value: T) -> T:
-            cls._register[key] = value                     # type: ignore
+            cls.register[key] = value
             return value
         return _wrapper
 
