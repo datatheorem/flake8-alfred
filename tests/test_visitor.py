@@ -14,6 +14,19 @@ TEST_ANNOTATIONS: T = (
     ("    pass             ", ())
 )
 
+TEST_COMPREHENSION: T = (
+    ("import a                  ", ("a",)),
+    ("import b                  ", ("b",)),
+    ("[a for a in range(2) if a]", ("range",)),
+    ("a                         ", ("a",)),
+    ("{a for a in range(2) if a}", ("range",)),
+    ("a                         ", ("a",)),
+    ("(a for a in range(2) if a)", ("range",)),
+    ("a                         ", ("a",)),
+    ("{a:b for a, b in it}      ", ()),
+    ("a, b                      ", ("a", "b"))
+)
+
 TEST_DELETE: T = (
     ("from a import b", ("a.b",)),
     ("del b          ", ()),
@@ -74,6 +87,7 @@ TEST_SCOPES: T = (
 
 TESTS: Collection[T] = (
     TEST_ANNOTATIONS,
+    TEST_COMPREHENSION,
     TEST_DELETE,
     TEST_EXCEPT,
     TEST_HEADER,
