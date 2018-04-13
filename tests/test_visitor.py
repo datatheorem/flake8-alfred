@@ -1,3 +1,10 @@
+"""Test for SymbolsVisitor. The tests are in the form of a sequence of tuples
+of (line, expectation) where line is a line of code and expectation is a
+collection of symbols we expect to encounter in the former.
+
+The tests are grouped together into TESTS and evaluated by test_visitor.
+"""
+
 from ast import parse
 from typing import Collection, Sequence, Tuple
 
@@ -43,9 +50,10 @@ TEST_EXCEPT: T = (
 )
 
 TEST_HEADER: T = (
-    ("from a import b ", ("a.b",)),
-    ("def b(b: b = b):", ("a.b",)),
-    ("    pass        ", ()),
+    ("import a, b, c, d", ("a", "b", "c", "d")),
+    ("def a(b: c = d): ", ("c", "d",)),
+    ("    a, b, c, d   ", ("c", "d",)),
+    ("a, b, c, d       ", ("b", "c", "d"))
 )
 
 TEST_IMPORT: T = (
@@ -56,6 +64,17 @@ TEST_IMPORT: T = (
     ("from d import b", ("d.b",)),
     ("import a       ", ("a",)),
     ("from a import b", ("a.b",)),
+)
+
+TEST_LAMBDA: T = (
+    ("import a     ", ("a",)),
+    ("import b     ", ("b",)),
+    ("lambda a: a  ", ()),
+    ("a            ", ("a",)),
+    ("lambda b=a: b", ("a",)),
+    ("a            ", ("a",)),
+    ("lambda b=a: b", ("a",)),
+    ("a, b         ", ("a", "b"))
 )
 
 TEST_OVERWRITE: T = (
@@ -69,22 +88,6 @@ TEST_OVERWRITE: T = (
     ("    a = d               ", ("m.d",))
 )
 
-TEST_SCOPES: T = (
-    ("import a          ", ("a",)),
-    ("from a import b   ", ("a.b",)),
-    ("from b import c   ", ("b.c",)),
-    ("from c import d   ", ("c.d",)),
-    ("del d             ", ()),
-    ("def f(x=b, a=a.c):", ("a.b", "a.c")),
-    ("    _ = a.b       ", ()),
-    ("    a = 22        ", ()),
-    ("    c = a         ", ()),
-    ("    def c():      ", ()),
-    ("        a = 1     ", ()),
-    ("        del a     ", ()),
-    ("a.b               ", ("a.b",))
-)
-
 TESTS: Collection[T] = (
     TEST_ANNOTATIONS,
     TEST_COMPREHENSION,
@@ -92,12 +95,12 @@ TESTS: Collection[T] = (
     TEST_EXCEPT,
     TEST_HEADER,
     TEST_IMPORT,
+    TEST_LAMBDA,
     TEST_OVERWRITE,
-    TEST_SCOPES
 )
 
 
-def test_visitor():
+def test_visitor() -> None:
     """Build an AST from the tests in TESTS, compare the actual output with
     the expected output.
     """

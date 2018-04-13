@@ -108,6 +108,7 @@ class WarnSymbols:
         for line in lines:
             symbol, _, warning = line.partition("=")
             cls.BANNED[symbol.strip()] = warning.strip()
+        cls.BANNED.pop("", None)
 
     def run(self) -> Iterator[FlakeError]:
         """Run the plugin."""
@@ -153,12 +154,12 @@ def visit_arg(vtor: SymbolsVisitor, node: arg) -> Symbols:
 @SymbolsVisitor.on(arguments)
 def visit_arguments(vtor: SymbolsVisitor, node: arguments) -> Symbols:
     """Visit the defaults values first, then the arguments names."""
-    yield from vtor.visit(node.kw_defaults)
-    yield from vtor.visit(node.defaults)
-    yield from vtor.visit(node.kwonlyargs)
-    yield from vtor.visit(node.args)
-    yield from vtor.visit(node.kwarg)
-    yield from vtor.visit(node.vararg)
+    yield from visit_sequence(vtor, node.kw_defaults)
+    yield from visit_sequence(vtor, node.defaults)
+    yield from visit_sequence(vtor, node.kwonlyargs)
+    yield from visit_sequence(vtor, node.args)
+    yield from visit_optional(vtor, node.kwarg)
+    yield from visit_optional(vtor, node.vararg)
 
 
 @SymbolsVisitor.on(comprehension)
@@ -258,8 +259,9 @@ def visit_dict_comp(vtor: SymbolsVisitor, node: DictComp) -> Symbols:
 @SymbolsVisitor.on(Lambda)
 def visit_lambda(vtor: SymbolsVisitor, node: Lambda) -> Symbols:
     """Visit the arguments first, then the body."""
-    yield from vtor.visit(node.args)
-    yield from vtor.visit(node.body)
+    with vtor.scope():
+        yield from vtor.visit(node.args)
+        yield from vtor.visit(node.body)
 
 
 @SymbolsVisitor.on(Name)
