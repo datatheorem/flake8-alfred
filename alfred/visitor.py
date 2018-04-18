@@ -2,7 +2,9 @@
 
 from collections import ChainMap
 from operator import attrgetter
-from typing import Any, Callable, ChainMap as ChainMapT, Hashable, TypeVar
+from typing import (
+    Any, Callable, ChainMap as ChainMapT, Dict, Hashable, Tuple, Type, TypeVar
+)
 
 
 T = TypeVar("T")
@@ -10,19 +12,18 @@ T = TypeVar("T")
 
 class RegisterMeta(type):
     """Register meta class. Classes that are implemented using this metaclass
-    have a `_register` attribute visible to their subclasses, that's a mapping
-    of arbitrary keys and values.
+    have a `shared_dict` property visible to their subclasses, that's a
+    mapping of arbitrary keys and values.
     """
-    def __new__(mcs, name, bases, namespace, **kwargs):    # type: ignore
-        parents = map(attrgetter("_register"), bases)
-        register = ChainMap({}, *parents)
-        namespace["_register"] = register
-        return super().__new__(mcs, name, bases, namespace, **kwargs)
+    @classmethod
+    def __prepare__(mcs, name: str, bases: Tuple[Type], **kwargs: Any) -> Dict:
+        dicts = map(attrgetter("shared_dict"), bases)
+        return {"_shared_dict": ChainMap(*dicts).new_child()}
 
     @property
-    def register(cls) -> ChainMapT[Hashable, Any]:
-        """Returns this class register."""
-        return cls._register                               # type: ignore
+    def shared_dict(cls) -> ChainMapT:
+        """Returns the class shared dict."""
+        return cls._shared_dict  # type: ignore
 
 
 class Dispatcher(metaclass=RegisterMeta):
@@ -30,13 +31,13 @@ class Dispatcher(metaclass=RegisterMeta):
     @classmethod
     def dispatch(cls, key: Hashable) -> Any:
         """Returns the item associated with `key` or raise `KeyError`."""
-        return cls.register[key]
+        return cls.shared_dict[key]
 
     @classmethod
-    def on(cls, key: Hashable) -> Callable[[T], T]:
-        """Register a value into the `_register` class attribute."""
+    def register(cls, key: Hashable) -> Callable[[T], T]:
+        """Register a value into the `shared_dict` class attribute."""
         def _wrapper(value: T) -> T:
-            cls.register[key] = value
+            cls.shared_dict[key] = value
             return value
         return _wrapper
 
@@ -45,7 +46,7 @@ class Visitor(Dispatcher):
     """Visitor base class."""
     def generic_visit(self, node: Any) -> Any:
         """Generic visitor for nodes of unknown type. The default
-        implementations raises a TypeError.
+        implementation raises a TypeError.
         """
         raise TypeError(f"{type(node)} is not registered by {self}")
 
@@ -55,7 +56,7 @@ class Visitor(Dispatcher):
         """
         for base in type(node).mro():
             try:
-                function = type(self).dispatch(base)
+                function = self.dispatch(base)
             except KeyError:
                 pass
             else:
