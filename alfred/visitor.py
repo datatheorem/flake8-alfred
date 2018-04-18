@@ -2,13 +2,9 @@
 
 from collections import ChainMap
 from operator import attrgetter
-
-from typing import (
-    Any, Callable, ChainMap as ChainMapT, Hashable, Optional, TypeVar
-)
+from typing import Any, Callable, ChainMap as ChainMapT, Hashable, TypeVar
 
 
-ScopeT = ChainMapT[str, Optional[str]]
 T = TypeVar("T")
 
 
@@ -25,9 +21,7 @@ class RegisterMeta(type):
 
     @property
     def register(cls) -> ChainMapT[Hashable, Any]:
-        """Returns this class register as a dict, and its parent's as a
-        `MappingProxyType`.
-        """
+        """Returns this class register."""
         return cls._register                               # type: ignore
 
 
