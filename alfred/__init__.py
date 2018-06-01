@@ -1,14 +1,13 @@
 """Flake8 plugin emitting warning for obsolete symbols."""
 
+__all__ = ["SymbolsVisitor", "WarnSymbols"]
+
 from ast import AST
 from typing import Any, Dict, Iterator, Optional, Tuple
 
 from pkg_resources import get_distribution
 from alfred.symbols import SymbolsVisitor
 
-
-__all__ = ["SymbolsVisitor", "WarnSymbols"]
-__version__ = get_distribution(__name__).version
 
 # Flake8 error type: (line number, column, warning message, caller type)
 FlakeError = Tuple[int, int, str, type]
@@ -22,7 +21,7 @@ class WarnSymbols:
     # requires add_options and parse_options for options handling.
 
     name: str = "warn-symbols"
-    version: str = __version__
+    version: str = get_distribution(__name__).version
 
     def __init__(self, tree: AST) -> None:
         self._tree = tree

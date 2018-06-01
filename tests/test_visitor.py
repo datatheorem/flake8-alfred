@@ -13,6 +13,13 @@ from alfred import SymbolsVisitor
 
 T = Sequence[Tuple[str, Collection[str]]]
 
+TEST_ALIAS: T = (
+    ("import a as b       ", ("a",)),
+    ("from a import b as c", ("a.b",)),
+    ("b                   ", ("a",)),
+    ("c                   ", ("a.b",))
+)
+
 TEST_ANNOTATIONS: T = (
     ("import a             ", ("a",)),
     ("from b import T      ", ("b.T",)),
@@ -89,6 +96,7 @@ TEST_OVERWRITE: T = (
 )
 
 TESTS: Collection[T] = (
+    TEST_ALIAS,
     TEST_ANNOTATIONS,
     TEST_COMPREHENSION,
     TEST_DELETE,
