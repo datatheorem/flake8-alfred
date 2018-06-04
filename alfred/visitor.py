@@ -2,12 +2,22 @@
 
 from collections import ChainMap
 from operator import attrgetter
+
 from typing import (
-    Any, Callable, ChainMap as ChainMapT, Dict, Hashable, Tuple, Type, TypeVar
+    Any,
+    Callable,
+    ChainMap as ChainMapT,
+    Dict,
+    Generic,
+    Hashable,
+    Tuple,
+    Type,
+    TypeVar
 )
 
 
 T = TypeVar("T")
+U = TypeVar("U")
 
 
 class RegisterMeta(type):
@@ -28,10 +38,9 @@ class RegisterMeta(type):
 
 class Dispatcher(metaclass=RegisterMeta):
     """Dispatcher base class."""
-    @classmethod
-    def dispatch(cls, key: Hashable) -> Any:
+    def dispatch(self, key: Hashable) -> Any:
         """Returns the item associated with `key` or raise `KeyError`."""
-        return cls.shared_dict[key]
+        return type(self).shared_dict[key]
 
     @classmethod
     def register(cls, key: Hashable) -> Callable[[T], T]:
@@ -42,15 +51,15 @@ class Dispatcher(metaclass=RegisterMeta):
         return _wrapper
 
 
-class Visitor(Dispatcher):
+class Visitor(Dispatcher, Generic[T, U]):
     """Visitor base class."""
-    def generic_visit(self, node: Any) -> Any:
+    def generic_visit(self, node: T) -> U:
         """Generic visitor for nodes of unknown type. The default
         implementation raises a TypeError.
         """
         raise TypeError(f"{type(node)} is not registered by {self}")
 
-    def visit(self, node: Any) -> Any:
+    def visit(self, node: T) -> U:
         """Visits a node by calling the registered function for this type of
         nodes.
         """

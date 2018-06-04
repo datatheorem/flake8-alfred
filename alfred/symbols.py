@@ -34,7 +34,7 @@ Symbols = Iterator[Tuple[str, Union[expr, stmt]]]
 UnaryComp = Union[GeneratorExp, ListComp, SetComp]
 
 
-class SymbolsVisitor(Visitor):
+class SymbolsVisitor(Visitor[AST, Symbols]):
     """SymbolsVisitor.visit yields a pair (qualified_name, node) for all
     qualified names it finds in the given AST.
 
@@ -58,7 +58,7 @@ class SymbolsVisitor(Visitor):
         self.scopes: ScopeT = ChainMap(dict(zip(init, init)))
 
     @contextmanager
-    def scope(self) -> Iterator[Mapping[str, Any]]:
+    def scope(self) -> Iterator[Mapping[str, Optional[str]]]:
         """Context manager that create a new scope (that is, add a mapping into
         self.scopes) and delete it on exit."""
         self.scopes = self.scopes.new_child()
