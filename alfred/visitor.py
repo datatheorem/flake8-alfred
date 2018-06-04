@@ -1,23 +1,16 @@
 """Generic implementation of the Visitor and Dispatcher patterns."""
 
 from collections import ChainMap
-from operator import attrgetter
 
 from typing import (
-    Any,
-    Callable,
-    ChainMap as ChainMapT,
-    Dict,
-    Generic,
-    Hashable,
-    Tuple,
-    Type,
-    TypeVar
+    Any, Callable, ChainMap as ChainMapT, Dict, Generic,
+    GenericMeta, Hashable, Tuple, Type, TypeVar
 )
 
 
-T = TypeVar("T")
-U = TypeVar("U")
+A = TypeVar("A")
+B = TypeVar("B")
+C = TypeVar("C")
 
 
 class RegisterMeta(type):
@@ -27,7 +20,7 @@ class RegisterMeta(type):
     """
     @classmethod
     def __prepare__(mcs, name: str, bases: Tuple[Type], **kwargs: Any) -> Dict:
-        dicts = map(attrgetter("shared_dict"), bases)
+        dicts = (base.shared_dict for base in bases if isinstance(base, mcs))
         return {"_shared_dict": ChainMap(*dicts).new_child()}
 
     @property
@@ -36,30 +29,34 @@ class RegisterMeta(type):
         return cls._shared_dict  # type: ignore
 
 
-class Dispatcher(metaclass=RegisterMeta):
+class GenericRegisterMeta(RegisterMeta, GenericMeta):
+    """Generic-compatible version of RegisterMeta."""
+
+
+class Dispatcher(Generic[A, B], metaclass=GenericRegisterMeta):
     """Dispatcher base class."""
-    def dispatch(self, key: Hashable) -> Any:
+    def dispatch(self, key: A) -> B:
         """Returns the item associated with `key` or raise `KeyError`."""
         return type(self).shared_dict[key]
 
     @classmethod
-    def register(cls, key: Hashable) -> Callable[[T], T]:
+    def on(cls, key: Hashable) -> Callable[[C], C]:
         """Register a value into the `shared_dict` class attribute."""
-        def _wrapper(value: T) -> T:
+        def _wrapper(value: C) -> C:
             cls.shared_dict[key] = value
             return value
         return _wrapper
 
 
-class Visitor(Dispatcher, Generic[T, U]):
+class Visitor(Dispatcher[Type[A], Callable[["Visitor[A, B]", A], B]]):
     """Visitor base class."""
-    def generic_visit(self, node: T) -> U:
+    def generic_visit(self, node: A) -> B:
         """Generic visitor for nodes of unknown type. The default
         implementation raises a TypeError.
         """
         raise TypeError(f"{type(node)} is not registered by {self}")
 
-    def visit(self, node: T) -> U:
+    def visit(self, node: A) -> B:
         """Visits a node by calling the registered function for this type of
         nodes.
         """
