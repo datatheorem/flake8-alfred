@@ -11,8 +11,7 @@ Cloning/Installation
 First, clone the repository:
 
 ```bash
-# Clone
-https://github.com/datatheorem/alfred-checker.git
+git clone https://github.com/datatheorem/alfred-checker.git
 ```
 
 Then, if you want to install the plugin on your user-specific directories, run
