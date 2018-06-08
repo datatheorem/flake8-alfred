@@ -18,8 +18,8 @@ from ast import (
 )
 
 from typing import (
-    Any, ChainMap as ChainMapT, Iterator, Mapping, Optional, Sequence, Tuple,
-    Union
+    Any, ChainMap as ChainMapT, Iterable, Iterator, Mapping, Optional,
+    Sequence, Tuple, TypeVar, Union
 )
 
 from collections import ChainMap
@@ -28,9 +28,12 @@ from contextlib import contextmanager
 from alfred.visitor import Visitor
 
 
+A = TypeVar("A")
+B = TypeVar("B")
+
 Function = Union[AsyncFunctionDef, FunctionDef]
 ScopeT = ChainMapT[str, Optional[str]]
-Symbols = Iterator[Tuple[str, Union[expr, stmt]]]
+Symbols = Iterable[Tuple[str, Union[expr, stmt]]]
 UnaryComp = Union[GeneratorExp, ListComp, SetComp]
 
 
@@ -79,13 +82,19 @@ class SymbolsVisitor(Visitor[AST, Symbols]):
 # HELPERS
 
 
-def visit_optional(vtor: Visitor, node: Optional[Any]) -> Iterator[Any]:
+def visit_optional(
+        vtor: Visitor[A, Iterable[B]],
+        node: Optional[A]
+) -> Iterable[B]:
     """Visit an optional node."""
     if node is not None:
         yield from vtor.visit(node)
 
 
-def visit_sequence(vtor: Visitor, node: Sequence[Any]) -> Iterator[Any]:
+def visit_sequence(
+        vtor: Visitor[Any, Iterable[B]],
+        node: Sequence[Any]
+) -> Iterable[B]:
     """Visit a sequence/list of nodes."""
     for item in node:
         yield from vtor.visit(item)
