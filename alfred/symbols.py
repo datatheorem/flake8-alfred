@@ -25,7 +25,7 @@ from typing import (
 from collections import ChainMap
 from contextlib import contextmanager
 
-from alfred.visitor import Visitor
+from .visitor import Visitor
 
 
 A = TypeVar("A")

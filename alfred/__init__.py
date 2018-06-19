@@ -6,7 +6,7 @@ from ast import AST
 from typing import Any, Dict, Iterator, Optional, Tuple
 
 from pkg_resources import get_distribution
-from alfred.symbols import SymbolsVisitor
+from .symbols import SymbolsVisitor
 
 
 # Flake8 error type: (line number, column, warning message, caller type)
@@ -21,7 +21,7 @@ class WarnSymbols:
     # requires add_options and parse_options for options handling.
 
     name: str = "warn-symbols"
-    version: str = get_distribution(__name__).version
+    version: str = get_distribution("flake8-alfred").version
 
     def __init__(self, tree: AST) -> None:
         self._tree = tree
