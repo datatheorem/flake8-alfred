@@ -38,7 +38,7 @@ pipenv install
 Configuration
 -------------
 
-By default, this plugin do nothing, you have to configure your project to
+By default, this plugin does nothing, you have to configure your project to
 enable it. Also no symbols are source of warnings by default.
 
 Here's an example of configuration in your project's `setup.cfg` (also works
