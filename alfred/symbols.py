@@ -18,8 +18,8 @@ from ast import (
 )
 
 from typing import (
-    Any, ChainMap as ChainMapT, Iterator, Mapping, Optional, Sequence, Tuple,
-    Union
+    Any, ChainMap as ChainMapT, Iterable, Iterator, Mapping, Optional,
+    Sequence, Tuple, TypeVar, Union
 )
 
 from collections import ChainMap
@@ -28,13 +28,16 @@ from contextlib import contextmanager
 from alfred.visitor import Visitor
 
 
+A = TypeVar("A")
+B = TypeVar("B")
+
 Function = Union[AsyncFunctionDef, FunctionDef]
 ScopeT = ChainMapT[str, Optional[str]]
-Symbols = Iterator[Tuple[str, Union[expr, stmt]]]
+Symbols = Iterable[Tuple[str, Union[expr, stmt]]]
 UnaryComp = Union[GeneratorExp, ListComp, SetComp]
 
 
-class SymbolsVisitor(Visitor):
+class SymbolsVisitor(Visitor[AST, Symbols]):
     """SymbolsVisitor.visit yields a pair (qualified_name, node) for all
     qualified names it finds in the given AST.
 
@@ -58,9 +61,10 @@ class SymbolsVisitor(Visitor):
         self.scopes: ScopeT = ChainMap(dict(zip(init, init)))
 
     @contextmanager
-    def scope(self) -> Iterator[Mapping[str, Any]]:
+    def scope(self) -> Iterator[Mapping[str, Optional[str]]]:
         """Context manager that create a new scope (that is, add a mapping into
-        self.scopes) and delete it on exit."""
+        self.scopes) and delete it on exit.
+        """
         self.scopes = self.scopes.new_child()
         try:
             yield self.scopes.maps[0]
@@ -78,13 +82,19 @@ class SymbolsVisitor(Visitor):
 # HELPERS
 
 
-def visit_optional(vtor: Visitor, node: Optional[Any]) -> Iterator[Any]:
+def visit_optional(
+        vtor: Visitor[A, Iterable[B]],
+        node: Optional[A]
+) -> Iterable[B]:
     """Visit an optional node."""
     if node is not None:
         yield from vtor.visit(node)
 
 
-def visit_sequence(vtor: Visitor, node: Sequence[Any]) -> Iterator[Any]:
+def visit_sequence(
+        vtor: Visitor[Any, Iterable[B]],
+        node: Sequence[Any]
+) -> Iterable[B]:
     """Visit a sequence/list of nodes."""
     for item in node:
         yield from vtor.visit(item)
@@ -93,14 +103,14 @@ def visit_sequence(vtor: Visitor, node: Sequence[Any]) -> Iterator[Any]:
 # SPECIAL
 
 
-@SymbolsVisitor.register(arg)
+@SymbolsVisitor.on(arg)
 def visit_arg(vtor: SymbolsVisitor, node: arg) -> Symbols:
     """Visit the annotation if any, remove the symbol from the context."""
     yield from visit_optional(vtor, node.annotation)
     vtor.scopes[node.arg] = None
 
 
-@SymbolsVisitor.register(arguments)
+@SymbolsVisitor.on(arguments)
 def visit_arguments(vtor: SymbolsVisitor, node: arguments) -> Symbols:
     """Visit the defaults values first, then the arguments names."""
     yield from visit_sequence(vtor, node.kw_defaults)
@@ -111,7 +121,7 @@ def visit_arguments(vtor: SymbolsVisitor, node: arguments) -> Symbols:
     yield from visit_optional(vtor, node.vararg)
 
 
-@SymbolsVisitor.register(comprehension)
+@SymbolsVisitor.on(comprehension)
 def visit_comprehension(vtor: SymbolsVisitor, node: comprehension) -> Symbols:
     """Visit the iterable expression, then the target name, then the
     predicates.
@@ -121,7 +131,7 @@ def visit_comprehension(vtor: SymbolsVisitor, node: comprehension) -> Symbols:
     yield from visit_sequence(vtor, node.ifs)
 
 
-@SymbolsVisitor.register(ExceptHandler)
+@SymbolsVisitor.on(ExceptHandler)
 def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
     """Visit the exception type, remove the alias from the context then
     visit the body.
@@ -135,7 +145,7 @@ def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
 # STATEMENTS
 
 
-@SymbolsVisitor.register(ClassDef)
+@SymbolsVisitor.on(ClassDef)
 def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
     """Visit in the following order:
         Decorators; Base classes; Keywords; Remove name from context; Body.
@@ -148,8 +158,8 @@ def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
         yield from visit_sequence(vtor, node.body)
 
 
-@SymbolsVisitor.register(AsyncFunctionDef)
-@SymbolsVisitor.register(FunctionDef)
+@SymbolsVisitor.on(AsyncFunctionDef)
+@SymbolsVisitor.on(FunctionDef)
 def visit_function(vtor: SymbolsVisitor, node: Function) -> Symbols:
     """Visit a function definition in the following order:
         Decorators; Return annotation; Arguments default values;
@@ -168,7 +178,7 @@ def visit_function(vtor: SymbolsVisitor, node: Function) -> Symbols:
         yield from visit_sequence(vtor, node.body)
 
 
-@SymbolsVisitor.register(Import)
+@SymbolsVisitor.on(Import)
 def visit_import(vtor: SymbolsVisitor, node: Import) -> Symbols:
     """Add the module to the current context."""
     for alias in node.names:
@@ -176,7 +186,7 @@ def visit_import(vtor: SymbolsVisitor, node: Import) -> Symbols:
         yield (alias.name, node)
 
 
-@SymbolsVisitor.register(ImportFrom)
+@SymbolsVisitor.on(ImportFrom)
 def visit_import_from(vtor: SymbolsVisitor, node: ImportFrom) -> Symbols:
     """Add the symbols to the current context."""
     for alias in node.names:
@@ -189,14 +199,14 @@ def visit_import_from(vtor: SymbolsVisitor, node: ImportFrom) -> Symbols:
 # EXPRESSIONS
 
 
-@SymbolsVisitor.register(Attribute)
+@SymbolsVisitor.on(Attribute)
 def visit_attribute(vtor: SymbolsVisitor, node: Attribute) -> Symbols:
     """Postfix the seen symbols."""
     for lhs, _ in vtor.visit(node.value):
         yield (f"{lhs}.{node.attr}", node)
 
 
-@SymbolsVisitor.register(DictComp)
+@SymbolsVisitor.on(DictComp)
 def visit_dict_comp(vtor: SymbolsVisitor, node: DictComp) -> Symbols:
     """Same as visit_unary_comp, except here we have a key and a value."""
     with vtor.scope():
@@ -205,7 +215,7 @@ def visit_dict_comp(vtor: SymbolsVisitor, node: DictComp) -> Symbols:
         yield from vtor.visit(node.value)
 
 
-@SymbolsVisitor.register(Lambda)
+@SymbolsVisitor.on(Lambda)
 def visit_lambda(vtor: SymbolsVisitor, node: Lambda) -> Symbols:
     """Visit the arguments first, then the body."""
     with vtor.scope():
@@ -213,7 +223,7 @@ def visit_lambda(vtor: SymbolsVisitor, node: Lambda) -> Symbols:
         yield from vtor.visit(node.body)
 
 
-@SymbolsVisitor.register(Name)
+@SymbolsVisitor.on(Name)
 def visit_name(vtor: SymbolsVisitor, node: Name) -> Symbols:
     """If the symbol is getting overwritten, then delete it from the context,
     else yield it if it's known in this context.
@@ -225,9 +235,9 @@ def visit_name(vtor: SymbolsVisitor, node: Name) -> Symbols:
         yield (name, node)
 
 
-@SymbolsVisitor.register(GeneratorExp)
-@SymbolsVisitor.register(ListComp)
-@SymbolsVisitor.register(SetComp)
+@SymbolsVisitor.on(GeneratorExp)
+@SymbolsVisitor.on(ListComp)
+@SymbolsVisitor.on(SetComp)
 def visit_unary_comp(vtor: SymbolsVisitor, node: UnaryComp) -> Symbols:
     """Visit the generators expressions, then the left element, the whole being
     wrapped into a new context.
