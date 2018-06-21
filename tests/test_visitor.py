@@ -8,7 +8,7 @@ The tests are grouped together into TESTS and evaluated by test_visitor.
 from ast import parse
 from typing import Collection, Sequence, Tuple
 
-from alfred import SymbolsVisitor
+from flake8_alfred import SymbolsVisitor
 
 
 T = Sequence[Tuple[str, Collection[str]]]
