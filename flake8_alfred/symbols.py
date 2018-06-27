@@ -19,7 +19,7 @@ from ast import (
 
 from typing import (
     Any, ChainMap as ChainMapT, Iterable, Iterator, Mapping, Optional,
-    Sequence, Tuple, TypeVar, Union
+    Tuple, TypeVar, Union
 )
 
 from collections import ChainMap
@@ -82,6 +82,22 @@ class SymbolsVisitor(Visitor[AST, Symbols]):
 # HELPERS
 
 
+def visit_arguments_defaults(vtor: SymbolsVisitor, node: arguments) -> Symbols:
+    """Visit the default values of function/lambda arguments."""
+    # kw_defaults is None for keywords-only arguments, and since None is not an
+    # AST subclass, this visitor should not visit it.
+    yield from visit_iterable(vtor, filter(None, node.kw_defaults))
+    yield from visit_iterable(vtor, node.defaults)
+
+
+def visit_arguments_names(vtor: SymbolsVisitor, node: arguments) -> Symbols:
+    """Visit the arguments names and annotations."""
+    yield from visit_iterable(vtor, node.kwonlyargs)
+    yield from visit_iterable(vtor, node.args)
+    yield from visit_optional(vtor, node.kwarg)
+    yield from visit_optional(vtor, node.vararg)
+
+
 def visit_optional(
         vtor: Visitor[A, Iterable[B]],
         node: Optional[A]
@@ -91,9 +107,9 @@ def visit_optional(
         yield from vtor.visit(node)
 
 
-def visit_sequence(
+def visit_iterable(
         vtor: Visitor[Any, Iterable[B]],
-        node: Sequence[Any]
+        node: Iterable[Any]
 ) -> Iterable[B]:
     """Visit a sequence/list of nodes."""
     for item in node:
@@ -113,12 +129,8 @@ def visit_arg(vtor: SymbolsVisitor, node: arg) -> Symbols:
 @SymbolsVisitor.on(arguments)
 def visit_arguments(vtor: SymbolsVisitor, node: arguments) -> Symbols:
     """Visit the defaults values first, then the arguments names."""
-    yield from visit_sequence(vtor, node.kw_defaults)
-    yield from visit_sequence(vtor, node.defaults)
-    yield from visit_sequence(vtor, node.kwonlyargs)
-    yield from visit_sequence(vtor, node.args)
-    yield from visit_optional(vtor, node.kwarg)
-    yield from visit_optional(vtor, node.vararg)
+    yield from visit_arguments_defaults(vtor, node)
+    yield from visit_arguments_names(vtor, node)
 
 
 @SymbolsVisitor.on(comprehension)
@@ -128,7 +140,7 @@ def visit_comprehension(vtor: SymbolsVisitor, node: comprehension) -> Symbols:
     """
     yield from vtor.visit(node.iter)
     yield from vtor.visit(node.target)
-    yield from visit_sequence(vtor, node.ifs)
+    yield from visit_iterable(vtor, node.ifs)
 
 
 @SymbolsVisitor.on(ExceptHandler)
@@ -139,7 +151,7 @@ def visit_except_handler(vtor: SymbolsVisitor, node: ExceptHandler) -> Symbols:
     yield from visit_optional(vtor, node.type)
     if node.name is not None:
         vtor.scopes[node.name] = None
-    yield from visit_sequence(vtor, node.body)
+    yield from visit_iterable(vtor, node.body)
 
 
 # STATEMENTS
@@ -150,12 +162,12 @@ def visit_class_def(vtor: SymbolsVisitor, node: ClassDef) -> Symbols:
     """Visit in the following order:
         Decorators; Base classes; Keywords; Remove name from context; Body.
     """
-    yield from visit_sequence(vtor, node.decorator_list)
-    yield from visit_sequence(vtor, node.bases)
-    yield from visit_sequence(vtor, node.keywords)
+    yield from visit_iterable(vtor, node.decorator_list)
+    yield from visit_iterable(vtor, node.bases)
+    yield from visit_iterable(vtor, node.keywords)
     vtor.scopes[node.name] = None
     with vtor.scope():
-        yield from visit_sequence(vtor, node.body)
+        yield from visit_iterable(vtor, node.body)
 
 
 @SymbolsVisitor.on(AsyncFunctionDef)
@@ -165,17 +177,13 @@ def visit_function(vtor: SymbolsVisitor, node: Function) -> Symbols:
         Decorators; Return annotation; Arguments default values;
         Remove name from context; Arguments names; Function body.
     """
-    yield from visit_sequence(vtor, node.decorator_list)
+    yield from visit_iterable(vtor, node.decorator_list)
     yield from visit_optional(vtor, node.returns)
-    yield from visit_sequence(vtor, node.args.kw_defaults)
-    yield from visit_sequence(vtor, node.args.defaults)
+    yield from visit_arguments_defaults(vtor, node.args)
     vtor.scopes[node.name] = None
     with vtor.scope():
-        yield from visit_sequence(vtor, node.args.kwonlyargs)
-        yield from visit_sequence(vtor, node.args.args)
-        yield from visit_optional(vtor, node.args.kwarg)
-        yield from visit_optional(vtor, node.args.vararg)
-        yield from visit_sequence(vtor, node.body)
+        yield from visit_arguments_names(vtor, node.args)
+        yield from visit_iterable(vtor, node.body)
 
 
 @SymbolsVisitor.on(Import)
@@ -210,7 +218,7 @@ def visit_attribute(vtor: SymbolsVisitor, node: Attribute) -> Symbols:
 def visit_dict_comp(vtor: SymbolsVisitor, node: DictComp) -> Symbols:
     """Same as visit_unary_comp, except here we have a key and a value."""
     with vtor.scope():
-        yield from visit_sequence(vtor, node.generators)
+        yield from visit_iterable(vtor, node.generators)
         yield from vtor.visit(node.key)
         yield from vtor.visit(node.value)
 
@@ -243,5 +251,5 @@ def visit_unary_comp(vtor: SymbolsVisitor, node: UnaryComp) -> Symbols:
     wrapped into a new context.
     """
     with vtor.scope():
-        yield from visit_sequence(vtor, node.generators)
+        yield from visit_iterable(vtor, node.generators)
         yield from vtor.visit(node.elt)
