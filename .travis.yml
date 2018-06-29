@@ -9,7 +9,6 @@ install:
 script:
     - pip install pipenv
     - pipenv install --dev
-    - pipenv install -e .
     - pipenv run flake8
     - pipenv run mypy flake8_alfred
     - pipenv run pytest

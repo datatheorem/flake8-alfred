@@ -6,16 +6,19 @@ Alfred the butler
 
 Alfred is a flake8 plugin to warn on unsafe/obsolete symbols. You can use it as
 a transition tools to eliminate functions, modules, variables you don't want in
-existing project or you want to avoid in new ones.
+existing project or you want to avoid in new ones. This plugin requires Python 3.6.
 
-Usage
------
+Getting Started
+---------------
 
-By default, this plugin does nothing, you have to configure your project to
-enable it. Also no symbols are source of warnings by default.
+First, install Alfred using pip:
 
-Here's an example of configuration in your project's `setup.cfg` (also works
-with `.flake8`):
+```bash
+$ pip install flake8-alfred
+```
+
+Then, enable the plugin by configuring a blacklist of Python symbols that should
+be flagged by flake8. Here is an example of configuration in your project's `setup.cfg`:
 
 ```ini
 [flake8]
@@ -26,9 +29,10 @@ warn-symbols =
     module.submodule.constant = Warning! this variable will be removed!
 ```
 
-Here enable-extensions tells flake8 to enable this plugin and warn-symbols is
-the list of symbols we want to avoid in our project, with the associated
-warning. By default, this plugin doesn't warn about any symbol.
+Here `enable-extensions` tells flake8 to enable this plugin and `warn-symbols` is
+the list of symbols we want to flag in our project, with the associated
+warning. By default, this plugin doesn't warn about any other symbol.
+
 
 If you just want to test/run once, you can also pass the configuration directly
 to flake8:
@@ -37,8 +41,8 @@ to flake8:
 $ flake8 --enable-extensions=B1 --warn-symbols=$'obsolte_module=Warning!\nmodule.obsolete_function=Warning!'
 ```
 
-Cloning/Installation
---------------------
+Local Development
+-----------------
 
 First, clone the repository:
 
@@ -46,23 +50,14 @@ First, clone the repository:
 git clone https://github.com/datatheorem/alfred-checker.git
 ```
 
-Then, if you want to install the plugin on your user-specific directories, run
-this command:
+The project uses pipenv to manage dependencies:
 
 ```bash
-python3 setup.py install --user
+$ pipenv install --dev
 ```
 
-If you want to install it on your system directories and make it available to
-all the users, run this command:
+Then, the test suite can be run:
 
 ```bash
-python3 setup.py install
-```
-
-You can also use pipenv to setup a more reproductible environment, but the
-setup.py install should be sufficient most of the time:
-
-```bash
-pipenv install
+$ pipenv run pytest
 ```
