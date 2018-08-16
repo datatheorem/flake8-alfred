@@ -3,8 +3,8 @@
 from collections import ChainMap
 
 from typing import (
-    Any, Callable, ChainMap as ChainMapT, Dict, Generic,
-    GenericMeta, Hashable, Tuple, Type, TypeVar
+    Any, Callable, ChainMap as ChainMapT, Dict,
+    Generic, Hashable, Tuple, Type, TypeVar
 )
 
 
@@ -14,13 +14,13 @@ C = TypeVar("C")
 
 
 class RegisterMeta(type):
-    """Register meta class. Classes that are implemented using this metaclass
-    have a `shared_dict` property visible to their subclasses, that's a
+    """Register metaclass. Classes that are implemented using this metaclass
+    have a `shared_dict` property visible to their subclasses, that is a
     mapping of arbitrary keys and values.
     """
     @classmethod
-    def __prepare__(mcs, name: str, bases: Tuple[Type], **kwargs: Any) -> Dict:
-        dicts = (base.shared_dict for base in bases if isinstance(base, mcs))
+    def __prepare__(cls, name: str, bases: Tuple[Type], **kwargs: Any) -> Dict:
+        dicts = (base.shared_dict for base in bases if isinstance(base, cls))
         return {"_shared_dict": ChainMap(*dicts).new_child()}
 
     @property
@@ -29,7 +29,7 @@ class RegisterMeta(type):
         return cls._shared_dict  # type: ignore
 
 
-class GenericRegisterMeta(RegisterMeta, GenericMeta):
+class GenericRegisterMeta(RegisterMeta, type(Generic)):
     """Generic-compatible version of RegisterMeta."""
 
 

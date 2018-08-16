@@ -5,7 +5,7 @@ Alfred the butler
 [![PyPI version](https://badge.fury.io/py/flake8-alfred.svg)](https://badge.fury.io/py/flake8-alfred)
 
 Alfred is a flake8 plugin to warn on unsafe/obsolete symbols. You can use it as
-a transition tools to eliminate functions, modules, variables you don't want in
+a transition tool to eliminate functions, modules, variables you don't want in
 existing project or you want to avoid in new ones. This plugin requires Python 3.6.
 
 Getting Started

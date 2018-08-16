@@ -1,4 +1,4 @@
-"""Flake8 plugin emitting warning for obsolete symbols."""
+"""Flake8 plugin emitting warning for banned symbols."""
 
 __all__ = ["SymbolsVisitor", "WarnSymbols"]
 
@@ -37,7 +37,7 @@ class WarnSymbols:
 
     @classmethod
     def parse_options(cls, options: Any) -> None:
-        """Load the obsolete symbols into cls.symbols."""
+        """Load the banned symbols into cls.BANNED."""
         lines = options.warn_symbols.splitlines()
         for line in lines:
             symbol, _, warning = line.partition("=")
@@ -52,8 +52,7 @@ class WarnSymbols:
             warning: Optional[str] = None
             for module in submodules(symbol):
                 warning = self.BANNED.get(module, warning)
-            # If there's no associated warning, it means the symbol is not
-            # deprecated.
+            # If there's no associated warning, it means the symbol is valid.
             if warning is None:
                 continue
             # Otherwise, we yield an error.
