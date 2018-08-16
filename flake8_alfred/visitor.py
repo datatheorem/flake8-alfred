@@ -29,7 +29,12 @@ class RegisterMeta(type):
         return cls._shared_dict  # type: ignore
 
 
-class GenericRegisterMeta(RegisterMeta, type(Generic)):
+# This class is useless since python 3.7 because GenericMeta was removed in
+# that version and Generic is now an instance of type. Before that this class
+# was needed because Dispatcher had to be an instance of both RegisterMeta and
+# GenericMeta since it subclass Generic.
+
+class GenericRegisterMeta(RegisterMeta, type(Generic)):  # type: ignore
     """Generic-compatible version of RegisterMeta."""
 
 
