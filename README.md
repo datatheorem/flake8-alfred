@@ -38,7 +38,7 @@ If you just want to test/run once, you can also pass the configuration directly
 to flake8:
 
 ```bash
-$ flake8 --enable-extensions=B1 --warn-symbols=$'obsolte_module=Warning!\nmodule.obsolete_function=Warning!'
+$ flake8 --enable-extensions=B1 --warn-symbols=$'obsolete_module=Warning!\nmodule.obsolete_function=Warning!'
 ```
 
 Local Development
