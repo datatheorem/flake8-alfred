@@ -1,16 +1,19 @@
 """Generic implementation of the Visitor and Dispatcher patterns."""
 
 from collections import ChainMap
-
-from typing import (
-    Any, Callable, ChainMap as ChainMapT, Dict,
-    Generic, Hashable, Tuple, Type, TypeVar
-)
+from collections.abc import Callable
+from inspect import Signature
+from types import UnionType
+from typing import Any
+from typing import Generic
+from typing import Self
+from typing import TypeVar
+from typing import get_args
 
 
 A = TypeVar("A")
 B = TypeVar("B")
-C = TypeVar("C")
+T = TypeVar("T")
 
 
 class RegisterMeta(type):
@@ -19,41 +22,23 @@ class RegisterMeta(type):
     mapping of arbitrary keys and values.
     """
     @classmethod
-    def __prepare__(cls, name: str, bases: Tuple[Type], **kwargs: Any) -> Dict:
+    def __prepare__(
+            cls,
+            name: str,
+            bases: tuple[type[Any], ...],
+            /,
+            **kwargs: Any,
+    ) -> dict[str, object]:
         dicts = (base.shared_dict for base in bases if isinstance(base, cls))
         return {"_shared_dict": ChainMap(*dicts).new_child()}
 
     @property
-    def shared_dict(cls) -> ChainMapT:
+    def shared_dict(cls) -> ChainMap:
         """Returns the class shared dict."""
         return cls._shared_dict  # type: ignore
 
 
-# This class is useless since python 3.7 because GenericMeta was removed in
-# that version and Generic is now an instance of type. Before that this class
-# was needed because Dispatcher had to be an instance of both RegisterMeta and
-# GenericMeta since it subclass Generic.
-
-class GenericRegisterMeta(RegisterMeta, type(Generic)):  # type: ignore
-    """Generic-compatible version of RegisterMeta."""
-
-
-class Dispatcher(Generic[A, B], metaclass=GenericRegisterMeta):
-    """Dispatcher base class."""
-    def dispatch(self, key: A) -> B:
-        """Returns the item associated with `key` or raise `KeyError`."""
-        return type(self).shared_dict[key]
-
-    @classmethod
-    def on(cls, key: Hashable) -> Callable[[C], C]:
-        """Register a value into the `shared_dict` class attribute."""
-        def _wrapper(value: C) -> C:
-            cls.shared_dict[key] = value
-            return value
-        return _wrapper
-
-
-class Visitor(Dispatcher[Type[A], Callable[["Visitor[A, B]", A], B]]):
+class Visitor(Generic[A, B], metaclass=RegisterMeta):
     """Visitor base class."""
     def generic_visit(self, node: A) -> B:
         """Generic visitor for nodes of unknown type. The default
@@ -61,15 +46,34 @@ class Visitor(Dispatcher[Type[A], Callable[["Visitor[A, B]", A], B]]):
         """
         raise TypeError(f"{type(node)} is not registered by {self}")
 
-    def visit(self, node: A) -> B:
+    @classmethod
+    def on(cls, function: Callable[[Self, T], B]) -> Callable[[Self, T], B]:
+        """Register a value into the `shared_dict` class attribute."""
+        signature = Signature.from_callable(function)
+        _, key_tp = signature.parameters.values()
+        for type_ in types_in_annotation(key_tp.annotation):
+            cls.shared_dict[type_] = function
+        return function
+
+    def visit(self: Self, node: A) -> B:
         """Visits a node by calling the registered function for this type of
         nodes.
         """
         for base in type(node).mro():
             try:
-                function = self.dispatch(base)
+                function: Callable[[Self, A], B] = type(self).shared_dict[base]
             except KeyError:
                 pass
             else:
                 return function(self, node)
         return self.generic_visit(node)
+
+
+def types_in_annotation(annotation: type[T]) -> tuple[type[T], ...]:
+    match annotation:
+        case UnionType() as union:
+            return get_args(union)
+        case type() as simple:
+            return (simple,)
+        case _:
+            assert False

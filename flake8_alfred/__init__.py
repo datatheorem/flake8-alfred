@@ -1,21 +1,24 @@
 """Flake8 plugin emitting warning for banned symbols."""
 
-__all__ = ["SymbolsVisitor", "WarnSymbols"]
+__all__ = ("SymbolsVisitor", "WarnSymbols")
 
+from argparse import Namespace
 from ast import AST
-from typing import Any, Dict, Iterator, Optional, Tuple
+from collections.abc import Iterator
 
+from flake8.options.manager import OptionManager
 from pkg_resources import get_distribution
+
 from .symbols import SymbolsVisitor
 
 
 # Flake8 error type: (line number, column, warning message, caller type)
-FlakeError = Tuple[int, int, str, type]
+FlakeError = tuple[int, int, str, type]
 
 
 class WarnSymbols:
     """The flake8 plugin itself."""
-    BANNED: Dict[str, str] = {}
+    BANNED: dict[str, str] = {}
 
     # The name and version class variables are required by flake8. It also
     # requires add_options and parse_options for options handling.
@@ -27,7 +30,7 @@ class WarnSymbols:
         self._tree = tree
 
     @classmethod
-    def add_options(cls, parser: Any) -> None:
+    def add_options(cls, parser: OptionManager) -> None:
         """Register the --warn-symbols options on parser."""
         parser.add_option("--warn-symbols", default="", parse_from_config=True)
 
@@ -36,7 +39,7 @@ class WarnSymbols:
     # files.
 
     @classmethod
-    def parse_options(cls, options: Any) -> None:
+    def parse_options(cls, options: Namespace) -> None:
         """Load the banned symbols into cls.BANNED."""
         lines = options.warn_symbols.splitlines()
         for line in lines:
@@ -49,7 +52,7 @@ class WarnSymbols:
         visitor = SymbolsVisitor()
         for symbol, node in visitor.visit(self._tree):
             # Get the warning associated to the most specific module name.
-            warning: Optional[str] = None
+            warning: str | None = None
             for module in submodules(symbol):
                 warning = self.BANNED.get(module, warning)
             # If there's no associated warning, it means the symbol is valid.

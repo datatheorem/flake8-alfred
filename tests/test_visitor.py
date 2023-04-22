@@ -1,26 +1,25 @@
 """Test for SymbolsVisitor. The tests are in the form of a sequence of tuples
 of (line, expectation) where line is a line of code and expectation is a
 collection of symbols we expect to encounter in the former.
-
-The tests are grouped together into TESTS and evaluated by test_visitor.
 """
 
 from ast import parse
-from typing import Collection, Sequence, Tuple
+from collections.abc import Collection
+from collections.abc import Sequence
+
+from pytest import mark
 
 from flake8_alfred import SymbolsVisitor
 
 
-T = Sequence[Tuple[str, Collection[str]]]
-
-TEST_ALIAS: T = (
+TEST_ALIAS = (
     ("import a as b       ", ("a",)),
     ("from a import b as c", ("a.b",)),
     ("b                   ", ("a",)),
     ("c                   ", ("a.b",))
 )
 
-TEST_ANNOTATIONS: T = (
+TEST_ANNOTATIONS = (
     ("import a             ", ("a",)),
     ("from b import T      ", ("b.T",)),
     ("x: a.T = 1           ", ("a.T",)),
@@ -28,7 +27,7 @@ TEST_ANNOTATIONS: T = (
     ("    pass             ", ())
 )
 
-TEST_COMPREHENSION: T = (
+TEST_COMPREHENSION = (
     ("import a                  ", ("a",)),
     ("import b                  ", ("b",)),
     ("[a for a in range(2) if a]", ("range",)),
@@ -41,13 +40,13 @@ TEST_COMPREHENSION: T = (
     ("a, b                      ", ("a", "b"))
 )
 
-TEST_DELETE: T = (
+TEST_DELETE = (
     ("from a import b", ("a.b",)),
     ("del b          ", ()),
     ("b              ", ())
 )
 
-TEST_EXCEPT: T = (
+TEST_EXCEPT = (
     ("from a import b        ", ("a.b",)),
     ("try:                   ", ()),
     ("    raise ValueError() ", ("ValueError",)),
@@ -56,14 +55,14 @@ TEST_EXCEPT: T = (
     ("b                      ", ())
 )
 
-TEST_HEADER: T = (
+TEST_HEADER = (
     ("import a, b, c, d", ("a", "b", "c", "d")),
     ("def a(b: c = d): ", ("c", "d",)),
     ("    a, b, c, d   ", ("c", "d",)),
     ("a, b, c, d       ", ("b", "c", "d"))
 )
 
-TEST_IMPORT: T = (
+TEST_IMPORT = (
     ("import a       ", ("a",)),
     ("import a       ", ("a",)),
     ("from a import b", ("a.b",)),
@@ -73,7 +72,7 @@ TEST_IMPORT: T = (
     ("from a import b", ("a.b",)),
 )
 
-TEST_LAMBDA: T = (
+TEST_LAMBDA = (
     ("import a     ", ("a",)),
     ("import b     ", ("b",)),
     ("lambda a: a  ", ()),
@@ -84,7 +83,7 @@ TEST_LAMBDA: T = (
     ("a, b         ", ("a", "b"))
 )
 
-TEST_OVERWRITE: T = (
+TEST_OVERWRITE = (
     ("from m import a, b, c, d", ("m.a", "m.b", "m.c", "m.d")),
     ("a, b, c, d              ", ("m.a", "m.b", "m.c", "m.d")),
     ("a = 1                   ", ()),
@@ -95,36 +94,37 @@ TEST_OVERWRITE: T = (
     ("    a = d               ", ("m.d",))
 )
 
-TESTS: Collection[T] = (
-    TEST_ALIAS,
-    TEST_ANNOTATIONS,
-    TEST_COMPREHENSION,
-    TEST_DELETE,
-    TEST_EXCEPT,
-    TEST_HEADER,
-    TEST_IMPORT,
-    TEST_LAMBDA,
-    TEST_OVERWRITE,
+
+@mark.parametrize(
+    "test",
+    (
+        TEST_ALIAS,
+        TEST_ANNOTATIONS,
+        TEST_COMPREHENSION,
+        TEST_DELETE,
+        TEST_EXCEPT,
+        TEST_HEADER,
+        TEST_IMPORT,
+        TEST_LAMBDA,
+        TEST_OVERWRITE,
+    ),
 )
-
-
-def test_visitor() -> None:
+def test_visitor(test: Sequence[tuple[str, Collection[str]]]) -> None:
     """Build an AST from the tests in TESTS, compare the actual output with
     the expected output.
     """
-    for test in TESTS:
-        # Transpose test. We now have a sequence of code lines, and another for
-        # expected symbols on a given line.
-        lines, symset = zip(*test)
+    # Transpose test. We now have a sequence of code lines, and another for
+    # expected symbols on a given line.
+    lines, symset = zip(*test)
 
-        # Concat the code lines, separating them by a newline, and visit the
-        # resulting code.
-        parsed = parse("\n".join(lines))
-        results = SymbolsVisitor().visit(parsed)
+    # Concat the code lines, separating them by a newline, and visit the
+    # resulting code.
+    parsed = parse("\n".join(lines))
+    results = SymbolsVisitor().visit(parsed)
 
-        # Build a set of (line, expected symbols) from symset.
-        # symbols is the actual output.
-        expect = {(l+1, n) for l, s in enumerate(symset) for n in s}
-        symbols = {(node.lineno, name) for name, node in results}
+    # Build a set of (line, expected symbols) from symset.
+    # symbols is the actual output.
+    expect = {(line + 1, n) for line, s in enumerate(symset) for n in s}
+    symbols = {(node.lineno, name) for name, node in results}
 
-        assert symbols == expect
+    assert symbols == expect
