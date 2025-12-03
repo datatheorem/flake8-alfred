@@ -5,7 +5,12 @@ __all__ = ["SymbolsVisitor", "WarnSymbols"]
 from ast import AST
 from typing import Any, Dict, Iterator, Optional, Tuple
 
-from pkg_resources import get_distribution
+try:
+    from importlib.metadata import version
+except ImportError:
+    # Python < 3.8
+    from importlib_metadata import version  # type: ignore
+
 from .symbols import SymbolsVisitor
 
 
@@ -21,7 +26,7 @@ class WarnSymbols:
     # requires add_options and parse_options for options handling.
 
     name: str = "warn-symbols"
-    version: str = get_distribution("flake8-alfred").version
+    version: str = version("flake8-alfred")
 
     def __init__(self, tree: AST) -> None:
         self._tree = tree
